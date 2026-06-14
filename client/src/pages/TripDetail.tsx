@@ -42,6 +42,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useActivities } from "@/hooks/useActivities";
+import { PlaceSearch } from "@/components/PlaceSearch";
+import { MapPreview } from "@/components/MapPreview";
 import {
   createActivity,
   updateActivity,
@@ -71,6 +73,8 @@ interface ActivityForm {
   notes: string;
   cost: string;
   duration: string;
+  lat?: number;
+  lng?: number;
 }
 
 const defaultActivityForm: ActivityForm = {
@@ -82,6 +86,8 @@ const defaultActivityForm: ActivityForm = {
   notes: "",
   cost: "",
   duration: "",
+  lat: undefined,
+  lng: undefined,
 };
 
 export default function TripDetail() {
@@ -172,6 +178,8 @@ export default function TripDetail() {
         notes: form.notes || undefined,
         cost: form.cost ? parseFloat(form.cost) : undefined,
         duration: form.duration ? parseInt(form.duration) : undefined,
+        lat: form.lat,
+        lng: form.lng,
       };
 
       if (editingActivity?.id) {
@@ -509,16 +517,20 @@ export default function TripDetail() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點名稱</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[oklch(0.65_0.06_220)]" />
-                <Input
-                  placeholder="例：淺草寺"
-                  value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  className="pl-10 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
-                />
-              </div>
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label>
+              <PlaceSearch
+                value={form.location}
+                onSelect={(place) =>
+                  setForm({
+                    ...form,
+                    location: place.name,
+                    address: place.formattedAddress,
+                    lat: place.lat,
+                    lng: place.lng,
+                  })
+                }
+                placeholder="搜尋景點、餐廳..."
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -672,7 +684,7 @@ function ActivityCard({
             </div>
 
             <div className="flex items-center gap-1">
-              {(activity.notes || activity.address) && (
+              {(activity.notes || activity.address || (activity as any).lat) && (
                 <button
                   onClick={() => setExpanded(!expanded)}
                   className="w-7 h-7 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.65_0.05_220)] transition-colors"
@@ -702,7 +714,7 @@ function ActivityCard({
 
           {/* Expandable details */}
           <AnimatePresence>
-            {expanded && (activity.notes || activity.address) && (
+            {expanded && (activity.notes || activity.address || (activity as any).lat) && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
@@ -710,8 +722,17 @@ function ActivityCard({
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-3 pt-3 border-t border-[oklch(0.94_0.008_220)] space-y-2">
-                  {activity.address && (
+                <div className="mt-3 pt-3 border-t border-[oklch(0.94_0.008_220)] space-y-3">
+                  {(activity as any).lat && (activity as any).lng && (
+                    <MapPreview
+                      lat={(activity as any).lat}
+                      lng={(activity as any).lng}
+                      title={activity.location}
+                      address={activity.address}
+                      compact
+                    />
+                  )}
+                  {activity.address && !(activity as any).lat && (
                     <div className="flex items-start gap-2 text-xs text-[oklch(0.55_0.05_220)]">
                       <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                       <span>{activity.address}</span>
