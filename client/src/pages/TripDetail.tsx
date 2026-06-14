@@ -25,6 +25,7 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO, addDays } from "date-fns";
@@ -42,6 +43,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useActivities } from "@/hooks/useActivities";
+import { useDragSort } from "@/hooks/useDragSort";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
 import {
@@ -135,6 +137,35 @@ export default function TripDetail() {
   }, [trip]);
 
   const currentDayActivities = activitiesByDay[selectedDay] || [];
+
+  // Drag and drop sorting
+  const dragSortItems = currentDayActivities.map((activity) => ({
+    id: activity.id || "",
+    data: activity,
+    order: activity.order,
+  }));
+
+  const { sortedItems, draggingId, dragOverId, isReordering, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } = useDragSort({
+    items: dragSortItems,
+    onReorder: async (reorderedItems) => {
+      try {
+        // Update each activity with new order
+        await Promise.all(
+          reorderedItems.map((item) =>
+            updateActivity(item.id, { order: item.order })
+          )
+        );
+        toast.success("活動順序已更新");
+      } catch (error) {
+        toast.error("更新順序失敗");
+        throw error;
+      }
+    },
+    onError: (error) => {
+      console.error("Drag sort error:", error);
+      toast.error("排序失敗，請稍後再試");
+    },
+  });
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
@@ -423,15 +454,36 @@ export default function TripDetail() {
                 <div className="absolute left-[19px] top-6 bottom-6 w-0.5 bg-[oklch(0.88_0.008_220)]" />
 
                 <div className="space-y-3">
-                  {currentDayActivities.map((activity, index) => (
-                    <ActivityCard
-                      key={activity.id}
-                      activity={activity}
-                      index={index}
-                      currency={trip.currency}
-                      onEdit={() => openEditActivity(activity)}
-                      onDelete={() => setDeletingActivity(activity)}
-                    />
+                  {sortedItems.map((item, index) => (
+                    <div
+                        key={item.id}
+                        draggable
+                        onDragStart={(e) => {
+                          const el = (e.currentTarget as HTMLElement);
+                          handleDragStart(e as any, item, el);
+                        }}
+                        onDragOver={(e) => handleDragOver(e as any, item)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e as any, item)}
+                        onDragEnd={handleDragEnd}
+                        className={`transition-all duration-200 ${
+                          draggingId === item.id ? "opacity-50 scale-95" : ""
+                        } ${
+                          dragOverId === item.id
+                            ? "ring-2 ring-[oklch(0.62_0.12_220)] rounded-xl"
+                            : ""
+                        }`}
+                    >
+                      <ActivityCard
+                          activity={item.data}
+                          index={index}
+                          currency={trip?.currency}
+                          isDragging={draggingId === item.id}
+                          isDragOver={dragOverId === item.id}
+                          onEdit={() => openEditActivity(item.data)}
+                          onDelete={() => setDeletingActivity(item.data)}
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -619,12 +671,16 @@ function ActivityCard({
   activity,
   index,
   currency,
+  isDragging,
+  isDragOver,
   onEdit,
   onDelete,
 }: {
   activity: Activity;
   index: number;
   currency?: string;
+  isDragging?: boolean;
+  isDragOver?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -650,7 +706,11 @@ function ActivityCard({
       <div className="flex-1 bg-white rounded-xl border border-[oklch(0.92_0.008_220)] overflow-hidden hover:shadow-md transition-shadow duration-200 mb-2">
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-2 flex-1 min-w-0">
+              <div className="mt-1 cursor-grab active:cursor-grabbing text-[oklch(0.65_0.05_220)] hover:text-[oklch(0.55_0.05_220)] transition-colors flex-shrink-0">
+                <GripVertical className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-[oklch(0.22_0.08_220)]">{activity.title}</h3>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${config.color}`}>
@@ -681,6 +741,7 @@ function ActivityCard({
                   </div>
                 )}
               </div>
+            </div>
             </div>
 
             <div className="flex items-center gap-1">
