@@ -44,6 +44,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/contexts/AuthContext";
 import { useActivities } from "@/hooks/useActivities";
 import { useDragSort } from "@/hooks/useDragSort";
+import { useTouchDragSort } from "@/hooks/useTouchDragSort";
+import { useIsMobile } from "@/hooks/useMobile";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
 import {
@@ -55,6 +57,7 @@ import {
   type Activity,
 } from "@/lib/firebase";
 import { useEffect } from "react";
+import { useCallback } from "react";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 
@@ -98,6 +101,7 @@ export default function TripDetail() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { activities, activitiesByDay, loading } = useActivities(tripId);
+  const isMobile = useIsMobile();
 
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tripLoading, setTripLoading] = useState(true);
@@ -145,11 +149,32 @@ export default function TripDetail() {
     order: activity.order,
   }));
 
-  const { sortedItems, draggingId, dragOverId, isReordering, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } = useDragSort({
+  // Use appropriate drag sort hook based on device
+  const touchDragResult = useTouchDragSort({
     items: dragSortItems,
     onReorder: async (reorderedItems) => {
       try {
-        // Update each activity with new order
+        await Promise.all(
+          reorderedItems.map((item) =>
+            updateActivity(item.id, { order: item.order })
+          )
+        );
+        toast.success("活動順序已更新");
+      } catch (error) {
+        toast.error("更新順序失敗");
+        throw error;
+      }
+    },
+    onError: (error) => {
+      console.error("Touch drag sort error:", error);
+      toast.error("排序失敗，請稍後再試");
+    },
+  });
+
+  const desktopDragResult = useDragSort({
+    items: dragSortItems,
+    onReorder: async (reorderedItems) => {
+      try {
         await Promise.all(
           reorderedItems.map((item) =>
             updateActivity(item.id, { order: item.order })
@@ -166,6 +191,12 @@ export default function TripDetail() {
       toast.error("排序失敗，請稍後再試");
     },
   });
+
+  // Select appropriate result based on device
+  const dragResult = isMobile ? touchDragResult : desktopDragResult;
+  const { sortedItems, draggingId, dragOverId, isReordering } = dragResult;
+  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined };
+  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined };
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
@@ -457,15 +488,19 @@ export default function TripDetail() {
                   {sortedItems.map((item, index) => (
                     <div
                         key={item.id}
-                        draggable
-                        onDragStart={(e) => {
+                        draggable={!isMobile}
+                        onPointerDown={isMobile ? (e) => handlePointerDown?.(e, item) : undefined}
+                        onPointerMove={isMobile ? (e) => handlePointerMove?.(e, item) : undefined}
+                        onPointerUp={isMobile ? (e) => handlePointerUp?.(e, item) : undefined}
+                        onPointerLeave={isMobile ? handlePointerLeave : undefined}
+                        onDragStart={!isMobile ? (e) => {
                           const el = (e.currentTarget as HTMLElement);
-                          handleDragStart(e as any, item, el);
-                        }}
-                        onDragOver={(e) => handleDragOver(e as any, item)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e as any, item)}
-                        onDragEnd={handleDragEnd}
+                          handleDragStart?.(e as any, item, el);
+                        } : undefined}
+                        onDragOver={!isMobile ? (e) => handleDragOver?.(e as any, item) : undefined}
+                        onDragLeave={!isMobile ? handleDesktopDragLeave : undefined}
+                        onDrop={!isMobile ? (e) => handleDrop?.(e as any, item) : undefined}
+                        onDragEnd={!isMobile ? handleDragEnd : undefined}
                         className={`transition-all duration-200 ${
                           draggingId === item.id ? "opacity-50 scale-95" : ""
                         } ${
