@@ -19,6 +19,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import TripDetail from "./pages/TripDetail";
+import SharedTrip from "./pages/SharedTrip";
 import NotFound from "./pages/NotFound";
 
 // Redirect root to appropriate page based on auth state
@@ -98,6 +99,7 @@ function Router() {
       <Route path="/trip/:id">
         {() => <ProtectedRoute component={TripDetail} />}
       </Route>
+      <Route path="/share/:token" component={SharedTrip} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

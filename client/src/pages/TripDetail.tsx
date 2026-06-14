@@ -26,6 +26,8 @@ import {
   ChevronDown,
   ChevronUp,
   GripVertical,
+  Download,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO, addDays } from "date-fns";
@@ -58,6 +60,8 @@ import {
 } from "@/lib/firebase";
 import { useEffect } from "react";
 import { useCallback } from "react";
+import { exportTripToPdf } from "@/lib/exportPdf";
+import { createShareLink, copyShareUrlToClipboard } from "@/lib/shareTrip";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 
