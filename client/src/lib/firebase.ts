@@ -146,8 +146,13 @@ export const tripsCollection = (userId: string) =>
   );
 
 export const createTrip = async (trip: Omit<Trip, "id" | "createdAt" | "updatedAt">) => {
+  // Filter out undefined values to prevent Firestore errors
+  const cleanedTrip = Object.fromEntries(
+    Object.entries(trip).filter(([, value]) => value !== undefined)
+  );
+  
   const docRef = await addDoc(collection(db, "trips"), {
-    ...trip,
+    ...cleanedTrip,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

@@ -122,8 +122,10 @@ export default function Dashboard() {
       toast.success("行程建立成功！開始規劃你的旅程 ✈️");
       setShowNewTrip(false);
       setForm({ title: "", destination: "", startDate: "", endDate: "", description: "", budget: "", currency: "TWD", status: "planning" });
-    } catch {
-      toast.error("建立行程失敗，請稍後再試");
+    } catch (error) {
+      console.error("建立行程錯誤:", error);
+      const errorMessage = error instanceof Error ? error.message : "建立行程失敗，請稍後再試";
+      toast.error(`建立行程失敗: ${errorMessage}`);
     } finally {
       setIsCreating(false);
     }
