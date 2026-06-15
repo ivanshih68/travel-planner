@@ -3,7 +3,7 @@
  * Design: Coastal Morning theme
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { subscribeToActivities, type Activity } from "@/lib/firebase";
 
 export const useActivities = (tripId: string | null) => {
@@ -28,15 +28,19 @@ export const useActivities = (tripId: string | null) => {
     return unsubscribe;
   }, [tripId]);
 
-  // Group activities by day
-  const activitiesByDay = activities.reduce(
-    (acc, activity) => {
-      const day = activity.day;
-      if (!acc[day]) acc[day] = [];
-      acc[day].push(activity);
-      return acc;
-    },
-    {} as Record<number, Activity[]>
+  // Group activities by day - memoize to prevent unnecessary re-renders
+  const activitiesByDay = useMemo(
+    () =>
+      activities.reduce(
+        (acc, activity) => {
+          const day = activity.day;
+          if (!acc[day]) acc[day] = [];
+          acc[day].push(activity);
+          return acc;
+        },
+        {} as Record<number, Activity[]>
+      ),
+    [activities]
   );
 
   return { activities, activitiesByDay, loading, error };

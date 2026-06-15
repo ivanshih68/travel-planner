@@ -562,7 +562,7 @@ export default function TripDetail() {
                   return (
                     <button
                       key={key}
-                      onClick={() => setForm({ ...form, category: key as Activity["category"] })}
+                      onClick={() => setForm((prev) => ({ ...prev, category: key as Activity["category"] }))}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all duration-150 ${
                         form.category === key
                           ? config.color + " font-medium"
@@ -582,7 +582,7 @@ export default function TripDetail() {
               <Input
                 placeholder="例：淺草寺參拜"
                 value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                 className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
               />
             </div>
@@ -595,7 +595,7 @@ export default function TripDetail() {
                   <Input
                     type="time"
                     value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
                     className="pl-10 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
                   />
                 </div>
@@ -606,7 +606,7 @@ export default function TripDetail() {
                   type="number"
                   placeholder="60"
                   value={form.duration}
-                  onChange={(e) => setForm({ ...form, duration: e.target.value })}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))}
                   className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
                 />
               </div>
@@ -617,13 +617,13 @@ export default function TripDetail() {
               <PlaceSearch
                 value={form.location}
                 onSelect={(place) =>
-                  setForm({
-                    ...form,
+                  setForm((prev) => ({
+                    ...prev,
                     location: place.name,
                     address: place.formattedAddress,
                     lat: place.lat,
                     lng: place.lng,
-                  })
+                  }))
                 }
                 placeholder="搜尋景點、餐廳..."
               />
@@ -634,7 +634,7 @@ export default function TripDetail() {
               <Input
                 placeholder="例：東京都台東區淺草2-3-1"
                 value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
                 className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
               />
             </div>
@@ -647,7 +647,7 @@ export default function TripDetail() {
                   type="number"
                   placeholder="0"
                   value={form.cost}
-                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                  onChange={(e) => setForm((prev) => ({ ...prev, cost: e.target.value }))}
                   className="pl-10 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
                 />
               </div>
@@ -658,7 +658,7 @@ export default function TripDetail() {
               <Textarea
                 placeholder="注意事項、預訂資訊..."
                 value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                 className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] resize-none"
                 rows={3}
               />
