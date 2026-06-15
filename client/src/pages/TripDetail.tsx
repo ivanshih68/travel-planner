@@ -5,7 +5,7 @@
  * Mobile: Horizontal day tabs + scrollable timeline
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -58,8 +58,6 @@ import {
   type Trip,
   type Activity,
 } from "@/lib/firebase";
-import { useEffect } from "react";
-import { useCallback } from "react";
 import { exportTripToPdf } from "@/lib/exportPdf";
 import { createShareLink, copyShareUrlToClipboard } from "@/lib/shareTrip";
 
@@ -147,14 +145,14 @@ export default function TripDetail() {
   const currentDayActivities = activitiesByDay[selectedDay] || [];
 
   // Drag and drop sorting - memoize to prevent infinite update loop
-  const dragSortItems = useMemo(
-    () => currentDayActivities.map((activity) => ({
+  const dragSortItems = useMemo(() => {
+    const activitiesForDay = activitiesByDay[selectedDay] || [];
+    return activitiesForDay.map((activity) => ({
       id: activity.id || "",
       data: activity,
       order: activity.order ?? 0,
-    })),
-    [currentDayActivities]
-  );
+    }));
+  }, [activitiesByDay, selectedDay]);
 
   // Use appropriate drag sort hook based on device
   const touchDragResult = useTouchDragSort({
@@ -227,6 +225,8 @@ export default function TripDetail() {
       notes: activity.notes || "",
       cost: activity.cost?.toString() || "",
       duration: activity.duration?.toString() || "",
+      lat: (activity as any).lat,
+      lng: (activity as any).lng,
     });
     setShowAddActivity(true);
   };
