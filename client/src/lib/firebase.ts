@@ -132,8 +132,6 @@ export interface Activity {
   cost?: number;
   currency?: string;
   duration?: number; // in minutes
-  lat?: number; // latitude for map preview
-  lng?: number; // longitude for map preview
   order: number; // display order within the day
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
