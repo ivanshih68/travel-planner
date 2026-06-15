@@ -143,51 +143,54 @@ export function useTouchDragSort<T>({
       setDragOverId(null);
 
       if (dragOverId && dragOverId !== draggingId) {
-        // Perform reorder
-        const newItems = [...sortedItems];
-        const draggedIndex = newItems.findIndex((i) => i.id === draggingId);
-        const targetIndex = newItems.findIndex((i) => i.id === dragOverId);
+        // Use functional update to avoid dependency on sortedItems
+        setSortedItems((prevItems) => {
+          const newItems = [...prevItems];
+          const draggedIndex = newItems.findIndex((i) => i.id === draggingId);
+          const targetIndex = newItems.findIndex((i) => i.id === dragOverId);
 
-        if (draggedIndex !== -1 && targetIndex !== -1) {
-          // Swap items
-          [newItems[draggedIndex], newItems[targetIndex]] = [
-            newItems[targetIndex],
-            newItems[draggedIndex],
-          ];
+          if (draggedIndex !== -1 && targetIndex !== -1) {
+            // Swap items
+            [newItems[draggedIndex], newItems[targetIndex]] = [
+              newItems[targetIndex],
+              newItems[draggedIndex],
+            ];
 
-          // Recalculate order
-          const reorderedItems = newItems.map((item, idx) => ({
-            ...item,
-            order: idx,
-          }));
+            // Recalculate order
+            const reorderedItems = newItems.map((item, idx) => ({
+              ...item,
+              order: idx,
+            }));
 
-          setSortedItems(reorderedItems);
+            // Persist to Firebase
+            setIsReordering(true);
+            onReorder(reorderedItems)
+              .catch((error) => {
+                // Rollback on error
+                setSortedItems(prevItems);
+                if (onError) {
+                  onError(
+                    error instanceof Error
+                      ? error
+                      : new Error("Failed to reorder items")
+                  );
+                }
+              })
+              .finally(() => {
+                setIsReordering(false);
+              });
 
-          // Persist to Firebase
-          setIsReordering(true);
-          try {
-            await onReorder(reorderedItems);
-          } catch (error) {
-            // Rollback on error
-            setSortedItems(sortedItems);
-            if (onError) {
-              onError(
-                error instanceof Error
-                  ? error
-                  : new Error("Failed to reorder items")
-              );
-            }
-          } finally {
-            setIsReordering(false);
+            return reorderedItems;
           }
-        }
+          return newItems;
+        });
       }
 
       setDraggingId(null);
       draggingItemRef.current = null;
       setTouchState(null);
     },
-    [draggingId, dragOverId, touchState, sortedItems, onReorder, onError]
+    [draggingId, dragOverId, touchState, onReorder, onError]
   );
 
   /**
