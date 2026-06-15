@@ -146,12 +146,15 @@ export default function TripDetail() {
 
   const currentDayActivities = activitiesByDay[selectedDay] || [];
 
-  // Drag and drop sorting
-  const dragSortItems = currentDayActivities.map((activity) => ({
-    id: activity.id || "",
-    data: activity,
-    order: activity.order,
-  }));
+  // Drag and drop sorting - memoize to prevent infinite update loop
+  const dragSortItems = useMemo(
+    () => currentDayActivities.map((activity) => ({
+      id: activity.id || "",
+      data: activity,
+      order: activity.order ?? 0,
+    })),
+    [currentDayActivities]
+  );
 
   // Use appropriate drag sort hook based on device
   const touchDragResult = useTouchDragSort({
@@ -197,14 +200,12 @@ export default function TripDetail() {
   });
 
   // Select appropriate result based on device
-  const dragResult = useMemo(() => isMobile ? touchDragResult : desktopDragResult, [isMobile, touchDragResult, desktopDragResult]);
+  const dragResult = isMobile ? touchDragResult : desktopDragResult;
   const { sortedItems, draggingId, dragOverId, isReordering } = dragResult;
   
-  const touchHandlers = useMemo(() => isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined }, [isMobile, touchDragResult]);
-  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = touchHandlers;
-  
-  const desktopHandlers = useMemo(() => !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined }, [isMobile, desktopDragResult]);
-  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = desktopHandlers;
+  // Get handlers from the appropriate drag result
+  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined };
+  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined };
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);

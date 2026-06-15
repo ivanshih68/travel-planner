@@ -41,9 +41,22 @@ export function useTouchDragSort<T>({
   const containerRef = useRef<HTMLElement | null>(null);
   const dragImageRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync items when props change
+  // Sync items when props change - only update if items actually changed
   useEffect(() => {
-    setSortedItems(items);
+    // Check if items reference changed (not just content)
+    // This prevents unnecessary updates when the same items are passed
+    setSortedItems((prev) => {
+      // If lengths differ, definitely update
+      if (prev.length !== items.length) return items;
+      // If any id changed, update
+      for (let i = 0; i < items.length; i++) {
+        if (prev[i]?.id !== items[i]?.id || prev[i]?.order !== items[i]?.order) {
+          return items;
+        }
+      }
+      // Otherwise keep previous state to avoid unnecessary renders
+      return prev;
+    });
   }, [items]);
 
   /**
