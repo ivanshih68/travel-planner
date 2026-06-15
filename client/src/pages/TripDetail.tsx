@@ -3,6 +3,7 @@
  * Design: Coastal Morning — Timeline layout with day tabs
  * Desktop: Day selector sidebar + activity timeline
  * Mobile: Horizontal day tabs + scrollable timeline
+ * Simplified: No drag-sort, basic activity list
  */
 
 import { useState, useMemo } from "react";
@@ -25,7 +26,6 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
-  GripVertical,
   Download,
   Share2,
 } from "lucide-react";
@@ -38,15 +38,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useActivities } from "@/hooks/useActivities";
-import { useDragSort } from "@/hooks/useDragSort";
-import { useTouchDragSort } from "@/hooks/useTouchDragSort";
 import { useIsMobile } from "@/hooks/useMobile";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
@@ -99,124 +96,102 @@ const defaultActivityForm: ActivityForm = {
   lng: undefined,
 };
 
+const DayEmptyState = ({ onAdd }: { onAdd: () => void }) => (
+  <div className="flex flex-col items-center justify-center py-12 px-4">
+    <div className="w-12 h-12 rounded-full bg-[oklch(0.88_0.008_220)] flex items-center justify-center mb-3">
+      <Plus className="w-6 h-6 text-[oklch(0.62_0.12_220)]" />
+    </div>
+    <p className="text-sm text-[oklch(0.55_0.05_220)] mb-4">還沒有活動安排</p>
+    <Button
+      onClick={onAdd}
+      size="sm"
+      className="bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.12_220)] text-white"
+    >
+      新增第一個活動
+    </Button>
+  </div>
+);
+
 export default function TripDetail() {
-  const params = useParams<{ id: string }>();
-  const tripId = params.id;
-  const [, setLocation] = useLocation();
+  const { tripId } = useParams<{ tripId: string }>();
+  const [, navigate] = useLocation();
   const { user } = useAuth();
-  const { activities, activitiesByDay, loading } = useActivities(tripId);
   const isMobile = useIsMobile();
 
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [tripLoading, setTripLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState(1);
   const [showAddActivity, setShowAddActivity] = useState(false);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [deletingActivity, setDeletingActivity] = useState<Activity | null>(null);
   const [form, setForm] = useState<ActivityForm>(defaultActivityForm);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingActivity, setDeletingActivity] = useState<Activity | null>(null);
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
+
+  const { activities, activitiesByDay, loading: activitiesLoading } = useActivities(tripId || null);
 
   // Load trip data
   useEffect(() => {
-    if (!tripId) return;
-    setTripLoading(true);
-    getTrip(tripId).then((t) => {
-      setTrip(t);
-      setTripLoading(false);
-    });
-  }, [tripId]);
+    if (!tripId || !user) return;
 
-  // Generate day list
+    const loadTrip = async () => {
+      try {
+        const tripData = await getTrip(tripId);
+        if (tripData) {
+          setTrip(tripData);
+        } else {
+          toast.error("行程不存在");
+          navigate("/dashboard");
+        }
+      } catch (error) {
+        toast.error("載入行程失敗");
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTrip();
+  }, [tripId, user, navigate]);
+
+  // Calculate days
   const days = useMemo(() => {
-    if (!trip?.startDate || !trip?.endDate) return [];
-    const start = parseISO(trip.startDate);
-    const end = parseISO(trip.endDate);
-    const dayCount = Math.max(
-      1,
-      Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-    );
+    if (!trip) return [];
+    const startDate = parseISO(trip.startDate);
+    const endDate = parseISO(trip.endDate);
+    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return Array.from({ length: dayCount }, (_, i) => ({
       day: i + 1,
-      date: addDays(start, i),
-      label: `Day ${i + 1}`,
-      dateStr: format(addDays(start, i), "M/d", { locale: zhTW }),
-      weekday: format(addDays(start, i), "EEE", { locale: zhTW }),
+      date: addDays(startDate, i),
     }));
   }, [trip]);
 
-  const currentDayActivities = activitiesByDay[selectedDay] || [];
+  // Get activities for selected day
+  const currentDayActivities = useMemo(() => {
+    const dayActivities = activitiesByDay[selectedDay] || [];
+    return dayActivities.sort((a, b) => {
+      if (!a.time || !b.time) return 0;
+      return a.time.localeCompare(b.time);
+    });
+  }, [activitiesByDay, selectedDay]);
 
-  // Drag and drop sorting - memoize to prevent infinite update loop
-  const dragSortItems = useMemo(
-    () => currentDayActivities.map((activity) => ({
-      id: activity.id || "",
-      data: activity,
-      order: activity.order ?? 0,
-    })),
-    [currentDayActivities]
-  );
+  // Calculate costs
+  const dayTotalCost = useMemo(() => {
+    return currentDayActivities.reduce((sum, activity) => sum + (Number(activity.cost) || 0), 0);
+  }, [currentDayActivities]);
 
-  // Use appropriate drag sort hook based on device
-  const touchDragResult = useTouchDragSort({
-    items: dragSortItems,
-    onReorder: async (reorderedItems) => {
-      try {
-        await Promise.all(
-          reorderedItems.map((item) =>
-            updateActivity(item.id, { order: item.order })
-          )
-        );
-        toast.success("活動順序已更新");
-      } catch (error) {
-        toast.error("更新順序失敗");
-        throw error;
-      }
-    },
-    onError: (error) => {
-      console.error("Touch drag sort error:", error);
-      toast.error("排序失敗，請稍後再試");
-    },
-  });
+  const totalCost = useMemo(() => {
+    return activities.reduce((sum, activity) => sum + (Number(activity.cost) || 0), 0);
+  }, [activities]);
 
-  const desktopDragResult = useDragSort({
-    items: dragSortItems,
-    onReorder: async (reorderedItems) => {
-      try {
-        await Promise.all(
-          reorderedItems.map((item) =>
-            updateActivity(item.id, { order: item.order })
-          )
-        );
-        toast.success("活動順序已更新");
-      } catch (error) {
-        toast.error("更新順序失敗");
-        throw error;
-      }
-    },
-    onError: (error) => {
-      console.error("Drag sort error:", error);
-      toast.error("排序失敗，請稍後再試");
-    },
-  });
-
-  // Select appropriate result based on device
-  const dragResult = isMobile ? touchDragResult : desktopDragResult;
-  const { sortedItems, draggingId, dragOverId, isReordering } = dragResult;
-  
-  // Get handlers from the appropriate drag result
-  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined };
-  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined };
-
-  const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
-  const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
-
-  const openAddActivity = () => {
+  // Handlers
+  const openAddActivity = useCallback(() => {
     setEditingActivity(null);
     setForm(defaultActivityForm);
     setShowAddActivity(true);
-  };
+  }, []);
 
-  const openEditActivity = (activity: Activity) => {
+  const openEditActivity = useCallback((activity: Activity) => {
     setEditingActivity(activity);
     setForm({
       title: activity.title,
@@ -227,322 +202,398 @@ export default function TripDetail() {
       notes: activity.notes || "",
       cost: activity.cost?.toString() || "",
       duration: activity.duration?.toString() || "",
+      lat: activity.lat,
+      lng: activity.lng,
     });
     setShowAddActivity(true);
-  };
+  }, []);
 
-  const handleSaveActivity = async () => {
+  const handleSaveActivity = useCallback(async () => {
     if (!form.title.trim()) {
       toast.error("請輸入活動名稱");
       return;
     }
-    if (!user || !tripId) return;
+
+    if (!tripId) return;
 
     setIsSaving(true);
     try {
+      if (!user) return;
+      
+      const dayDate = days[selectedDay - 1]?.date;
       const activityData = {
-        title: form.title.trim(),
+        tripId,
+        userId: user.uid,
+        title: form.title,
         category: form.category,
-        time: form.time || undefined,
-        location: form.location || undefined,
-        address: form.address || undefined,
-        notes: form.notes || undefined,
-        cost: form.cost ? parseFloat(form.cost) : undefined,
-        duration: form.duration ? parseInt(form.duration) : undefined,
+        time: form.time,
+        location: form.location,
+        address: form.address,
+        notes: form.notes,
+        cost: form.cost ? Number(form.cost) : 0,
+        duration: form.duration ? Number(form.duration) : 0,
         lat: form.lat,
         lng: form.lng,
+        day: selectedDay,
+        date: dayDate ? dayDate.toISOString().split('T')[0] : '',
+        order: currentDayActivities.length,
       };
 
-      if (editingActivity?.id) {
+      if (editingActivity) {
+        if (!editingActivity.id) throw new Error("Activity ID is missing");
         await updateActivity(editingActivity.id, activityData);
         toast.success("活動已更新");
       } else {
-        await createActivity({
-          ...activityData,
-          tripId,
-          userId: user.uid,
-          day: selectedDay,
-          date: days[selectedDay - 1]?.date
-            ? format(days[selectedDay - 1].date, "yyyy-MM-dd")
-            : "",
-          order: currentDayActivities.length,
-        });
-        toast.success("活動已新增");
+        await createActivity(activityData);
+        toast.success("活動已新延");
       }
+
       setShowAddActivity(false);
       setForm(defaultActivityForm);
-    } catch {
-      toast.error("儲存失敗，請稍後再試");
+      setEditingActivity(null);
+    } catch (error) {
+      toast.error(`保存失敗: ${error instanceof Error ? error.message : "未知錯誤"}`);
+      console.error(error);
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [form, tripId, selectedDay, editingActivity]);
 
-  const handleDeleteActivity = async () => {
-    if (!deletingActivity?.id) return;
+  const handleDeleteActivity = useCallback(async () => {
+    if (!deletingActivity || !deletingActivity.id) return;
+
     try {
       await deleteActivity(deletingActivity.id);
       toast.success("活動已刪除");
       setDeletingActivity(null);
-    } catch {
+    } catch (error) {
       toast.error("刪除失敗");
+      console.error(error);
     }
-  };
+  }, [deletingActivity]);
 
-  if (tripLoading) {
-    return (
-      <div className="min-h-screen bg-[oklch(0.97_0.015_80)] p-6">
-        <Skeleton className="h-8 w-48 mb-4" />
-        <Skeleton className="h-32 w-full rounded-2xl mb-4" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-      </div>
-    );
-  }
+  const handleExportPdf = useCallback(async () => {
+    if (!trip) return;
+    try {
+      await exportTripToPdf(trip, activitiesByDay);
+      toast.success("PDF 已下載");
+    } catch (error) {
+      toast.error("匯出失敗");
+      console.error(error);
+    }
+  }, [trip, activitiesByDay]);
 
-  if (!trip) {
+  const handleShareTrip = useCallback(async () => {
+    if (!tripId || !user) return;
+    try {
+      const shareLink = await createShareLink(tripId, user.uid);
+      await copyShareUrlToClipboard(shareLink.shareToken);
+      toast.success("分享連結已複製到剪貼板");
+    } catch (error) {
+      toast.error("分享失敗");
+      console.error(error);
+    }
+  }, [tripId, user]);
+
+  if (loading || !trip) {
     return (
-      <div className="min-h-screen bg-[oklch(0.97_0.015_80)] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-[oklch(0.52_0.05_220)] mb-4">找不到此行程</p>
-          <Button onClick={() => setLocation("/dashboard")}>返回行程列表</Button>
-        </div>
+      <div className="min-h-screen bg-white p-4 lg:p-8">
+        <Skeleton className="h-12 w-32 mb-6" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[oklch(0.97_0.015_80)] flex flex-col">
-      {/* ===== Header ===== */}
-      <header className="bg-[oklch(0.22_0.08_220)] text-white sticky top-0 z-20">
-        <div className="px-4 lg:px-8 py-4 flex items-center gap-4">
-          <button
-            onClick={() => setLocation("/dashboard")}
-            className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors active:scale-[0.9]"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <img src={LOGO_URL} alt="Voyager" className="w-6 h-6 brightness-0 invert hidden sm:block" />
-            <div className="min-w-0">
-              <h1 className="font-['Playfair_Display'] text-lg font-bold truncate">{trip.title}</h1>
-              <div className="flex items-center gap-2 text-white/60 text-xs">
-                <MapPin className="w-3 h-3" />
-                <span>{trip.destination}</span>
-                <span>·</span>
-                <span className="font-['DM_Mono']">{days.length} 天</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Trip stats */}
-          <div className="hidden sm:flex items-center gap-4 text-sm">
-            <div className="text-right">
-              <p className="text-white/50 text-xs">活動數</p>
-              <p className="font-['DM_Mono'] font-bold">{activities.length}</p>
-            </div>
-            {trip.budget && (
-              <div className="text-right">
-                <p className="text-white/50 text-xs">總預算</p>
-                <p className="font-['DM_Mono'] font-bold">{trip.budget.toLocaleString()} {trip.currency}</p>
-              </div>
-            )}
-          </div>
+    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
+      {/* Header */}
+      <header className="lg:hidden sticky top-0 z-40 bg-white border-b border-[oklch(0.94_0.008_220)] px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="p-2 hover:bg-[oklch(0.94_0.008_220)] rounded-lg transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5 text-[oklch(0.22_0.08_220)]" />
+        </button>
+        <div className="flex-1 ml-3">
+          <h1 className="font-['Playfair_Display'] text-lg font-bold text-[oklch(0.22_0.08_220)]">
+            {trip.destination}
+          </h1>
         </div>
-
-        {/* Day tabs — horizontal scroll */}
-        <div className="flex gap-1 px-4 lg:px-8 pb-3 overflow-x-auto scrollbar-hide">
-          {days.map((day) => {
-            const dayActivities = activitiesByDay[day.day] || [];
-            return (
-              <button
-                key={day.day}
-                onClick={() => setSelectedDay(day.day)}
-                className={`flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl transition-all duration-150 min-w-[60px] ${
-                  selectedDay === day.day
-                    ? "bg-[oklch(0.62_0.12_220)] text-white"
-                    : "hover:bg-white/10 text-white/60"
-                }`}
-              >
-                <span className="text-xs font-['DM_Mono'] font-bold">{day.label}</span>
-                <span className="text-xs mt-0.5">{day.dateStr}</span>
-                {dayActivities.length > 0 && (
-                  <div className="w-1 h-1 rounded-full bg-[oklch(0.72_0.14_35)] mt-1" />
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="w-5 h-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleExportPdf}>
+              <Download className="w-4 h-4 mr-2" />
+              匯出 PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleShareTrip}>
+              <Share2 className="w-4 h-4 mr-2" />
+              分享行程
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
-      {/* ===== Main Content ===== */}
-      <div className="flex-1 flex">
-        {/* Desktop: Day info sidebar */}
-        <aside className="hidden lg:block w-72 bg-white border-r border-[oklch(0.92_0.008_220)] p-6">
-          {days[selectedDay - 1] && (
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex flex-col w-80 border-r border-[oklch(0.94_0.008_220)] bg-[oklch(0.98_0.001_286)]">
+        {/* Header */}
+        <div className="p-6 border-b border-[oklch(0.94_0.008_220)]">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="flex items-center gap-2 text-[oklch(0.62_0.12_220)] hover:text-[oklch(0.55_0.12_220)] mb-4 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm font-medium">返回</span>
+          </button>
+          <h1 className="font-['Playfair_Display'] text-2xl font-bold text-[oklch(0.22_0.08_220)] mb-1">
+            {trip.destination}
+          </h1>
+          <p className="text-xs text-[oklch(0.55_0.05_220)] font-['DM_Mono']">
+            {format(parseISO(trip.startDate), "M月d日", { locale: zhTW })} —{" "}
+            {format(parseISO(trip.endDate), "M月d日", { locale: zhTW })}
+          </p>
+        </div>
+
+        {/* Day selector */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {days.map((day) => (
+            <button
+              key={day.day}
+              onClick={() => setSelectedDay(day.day)}
+              className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-150 ${
+                selectedDay === day.day
+                  ? "bg-[oklch(0.62_0.12_220)] text-white"
+                  : "hover:bg-[oklch(0.94_0.008_220)] text-[oklch(0.22_0.08_220)]"
+              }`}
+            >
+              <p className="text-xs font-['DM_Mono'] opacity-75 mb-1">Day {day.day}</p>
+              <p className="text-sm font-medium">
+                {format(day.date, "M月d日 EEEE", { locale: zhTW })}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* Stats */}
+        {currentDayActivities.length > 0 && (
+          <div className="p-4 border-t border-[oklch(0.94_0.008_220)] space-y-3">
             <div>
-              <div className="mb-6">
-                <p className="text-xs text-[oklch(0.55_0.05_220)] font-['DM_Mono'] uppercase tracking-widest mb-1">
-                  Day {selectedDay}
-                </p>
-                <h2 className="font-['Playfair_Display'] text-2xl font-bold text-[oklch(0.22_0.08_220)]">
-                  {format(days[selectedDay - 1].date, "M月d日", { locale: zhTW })}
-                </h2>
-                <p className="text-[oklch(0.55_0.05_220)] text-sm">
-                  {format(days[selectedDay - 1].date, "EEEE", { locale: zhTW })}
-                </p>
-              </div>
-
-              {/* Day stats */}
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center justify-between py-2 border-b border-[oklch(0.94_0.008_220)]">
-                  <span className="text-sm text-[oklch(0.55_0.05_220)]">活動數量</span>
-                  <span className="font-['DM_Mono'] font-bold text-[oklch(0.22_0.08_220)]">
-                    {currentDayActivities.length}
-                  </span>
-                </div>
-                {dayTotalCost > 0 && (
-                  <div className="flex items-center justify-between py-2 border-b border-[oklch(0.94_0.008_220)]">
-                    <span className="text-sm text-[oklch(0.55_0.05_220)]">當日費用</span>
-                    <span className="font-['DM_Mono'] font-bold text-[oklch(0.22_0.08_220)]">
-                      {dayTotalCost.toLocaleString()} {trip.currency || "TWD"}
-                    </span>
-                  </div>
-                )}
-                {totalCost > 0 && (
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-[oklch(0.55_0.05_220)]">總計費用</span>
-                    <span className="font-['DM_Mono'] font-bold text-[oklch(0.62_0.12_220)]">
-                      {totalCost.toLocaleString()} {trip.currency || "TWD"}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Category breakdown */}
-              <div>
-                <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest mb-3 font-['DM_Mono']">
-                  活動分類
-                </p>
-                <div className="space-y-2">
-                  {Object.entries(categoryConfig).map(([key, config]) => {
-                    const count = currentDayActivities.filter((a) => a.category === key).length;
-                    if (count === 0) return null;
-                    const Icon = config.icon;
-                    return (
-                      <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${config.color}`}>
-                        <Icon className="w-3.5 h-3.5" />
-                        <span className="text-xs font-medium">{config.label}</span>
-                        <span className="ml-auto text-xs font-['DM_Mono'] font-bold">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest font-['DM_Mono'] mb-2">
+                當日活動
+              </p>
+              <p className="text-lg font-bold text-[oklch(0.22_0.08_220)]">
+                {currentDayActivities.length} 個
+              </p>
             </div>
-          )}
-        </aside>
 
-        {/* Activity timeline */}
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
-          {/* Day header (mobile) */}
-          <div className="lg:hidden mb-4">
-            {days[selectedDay - 1] && (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] font-['DM_Mono'] uppercase tracking-widest">
-                    Day {selectedDay}
-                  </p>
-                  <h2 className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)]">
-                    {format(days[selectedDay - 1].date, "M月d日 EEEE", { locale: zhTW })}
-                  </h2>
-                </div>
-                {currentDayActivities.length > 0 && dayTotalCost > 0 && (
-                  <div className="text-right">
-                    <p className="text-xs text-[oklch(0.55_0.05_220)]">當日費用</p>
-                    <p className="font-['DM_Mono'] font-bold text-[oklch(0.62_0.12_220)]">
-                      {dayTotalCost.toLocaleString()}
-                    </p>
-                  </div>
-                )}
+            {dayTotalCost > 0 && (
+              <div>
+                <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest font-['DM_Mono'] mb-2">
+                  當日費用
+                </p>
+                <p className="text-lg font-bold text-[oklch(0.62_0.12_220)] font-['DM_Mono']">
+                  {dayTotalCost.toLocaleString()} {trip.currency || "TWD"}
+                </p>
+              </div>
+            )}
+
+            {totalCost > 0 && (
+              <div>
+                <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest font-['DM_Mono'] mb-2">
+                  總計費用
+                </p>
+                <p className="text-lg font-bold text-[oklch(0.62_0.12_220)] font-['DM_Mono']">
+                  {totalCost.toLocaleString()} {trip.currency || "TWD"}
+                </p>
               </div>
             )}
           </div>
+        )}
 
-          {/* Add activity button */}
+        {/* Actions */}
+        <div className="p-4 border-t border-[oklch(0.94_0.008_220)] space-y-2">
           <Button
-            onClick={openAddActivity}
-            className="w-full mb-6 h-11 border-2 border-dashed border-[oklch(0.82_0.06_220)] bg-transparent hover:bg-[oklch(0.62_0.12_220)]/5 text-[oklch(0.62_0.12_220)] hover:text-[oklch(0.55_0.12_220)] gap-2 transition-all duration-150"
+            onClick={handleExportPdf}
             variant="outline"
+            className="w-full border-[oklch(0.88_0.008_220)] gap-2"
+            size="sm"
           >
-            <Plus className="w-4 h-4" />
-            新增活動
+            <Download className="w-4 h-4" />
+            匯出 PDF
           </Button>
+          <Button
+            onClick={handleShareTrip}
+            className="w-full bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.12_220)] text-white gap-2"
+            size="sm"
+          >
+            <Share2 className="w-4 h-4" />
+            分享行程
+          </Button>
+        </div>
+      </aside>
 
-          {/* Timeline */}
-          {loading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-24 rounded-xl" />
-              ))}
-            </div>
-          ) : currentDayActivities.length === 0 ? (
-            <DayEmptyState onAdd={openAddActivity} />
-          ) : (
-            <AnimatePresence>
-              <div className="relative">
-                {/* Timeline line */}
-                <div className="absolute left-[19px] top-6 bottom-6 w-0.5 bg-[oklch(0.88_0.008_220)]" />
-
-                <div className="space-y-3">
-                  {sortedItems.map((item, index) => (
-                    <div
-                        key={item.id}
-                        draggable={!isMobile}
-                        onPointerDown={isMobile ? (e) => handlePointerDown?.(e, item) : undefined}
-                        onPointerMove={isMobile ? (e) => handlePointerMove?.(e, item) : undefined}
-                        onPointerUp={isMobile ? (e) => handlePointerUp?.(e, item) : undefined}
-                        onPointerLeave={isMobile ? handlePointerLeave : undefined}
-                        onDragStart={!isMobile ? (e) => {
-                          const el = (e.currentTarget as HTMLElement);
-                          handleDragStart?.(e as any, item, el);
-                        } : undefined}
-                        onDragOver={!isMobile ? (e) => handleDragOver?.(e as any, item) : undefined}
-                        onDragLeave={!isMobile ? handleDesktopDragLeave : undefined}
-                        onDrop={!isMobile ? (e) => handleDrop?.(e as any, item) : undefined}
-                        onDragEnd={!isMobile ? handleDragEnd : undefined}
-                        className={`transition-all duration-200 ${
-                          draggingId === item.id ? "opacity-50 scale-95" : ""
-                        } ${
-                          dragOverId === item.id
-                            ? "ring-2 ring-[oklch(0.62_0.12_220)] rounded-xl"
-                            : ""
-                        }`}
-                    >
-                      <ActivityCard
-                          activity={item.data}
-                          index={index}
-                          currency={trip?.currency}
-                          isDragging={draggingId === item.id}
-                          isDragOver={dragOverId === item.id}
-                          onEdit={() => openEditActivity(item.data)}
-                          onDelete={() => setDeletingActivity(item.data)}
-                      />
-                    </div>
-                  ))}
-                </div>
+      {/* Main content */}
+      <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
+        {/* Day header (mobile) */}
+        <div className="lg:hidden mb-4">
+          {days[selectedDay - 1] && (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[oklch(0.55_0.05_220)] font-['DM_Mono'] uppercase tracking-widest">
+                  Day {selectedDay}
+                </p>
+                <h2 className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)]">
+                  {format(days[selectedDay - 1].date, "M月d日 EEEE", { locale: zhTW })}
+                </h2>
               </div>
-            </AnimatePresence>
+              {currentDayActivities.length > 0 && dayTotalCost > 0 && (
+                <div className="text-right">
+                  <p className="text-xs text-[oklch(0.55_0.05_220)]">當日費用</p>
+                  <p className="font-['DM_Mono'] font-bold text-[oklch(0.62_0.12_220)]">
+                    {dayTotalCost.toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </div>
           )}
-        </main>
-      </div>
+        </div>
 
-      {/* Mobile FAB */}
-      <button
-        onClick={openAddActivity}
-        className="lg:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[oklch(0.62_0.12_220)] text-white shadow-lg flex items-center justify-center active:scale-[0.9] transition-transform z-10"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+        {/* Add activity button */}
+        <Button
+          onClick={openAddActivity}
+          className="w-full mb-6 h-11 border-2 border-dashed border-[oklch(0.82_0.06_220)] bg-transparent hover:bg-[oklch(0.62_0.12_220)]/5 text-[oklch(0.62_0.12_220)] hover:text-[oklch(0.55_0.12_220)] gap-2 transition-all duration-150"
+          variant="outline"
+        >
+          <Plus className="w-4 h-4" />
+          新增活動
+        </Button>
+
+        {/* Activity list */}
+        {activitiesLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+          </div>
+        ) : currentDayActivities.length === 0 ? (
+          <DayEmptyState onAdd={openAddActivity} />
+        ) : (
+          <AnimatePresence>
+            <div className="space-y-3">
+              {currentDayActivities.map((activity) => {
+                const config = categoryConfig[activity.category];
+                const Icon = config.icon;
+                const isExpanded = expandedActivityId === activity.id;
+
+                return (
+                  <motion.div
+                    key={activity.id}
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="border border-[oklch(0.94_0.008_220)] rounded-xl overflow-hidden hover:border-[oklch(0.82_0.06_220)] transition-all duration-150"
+                  >
+                    {/* Activity card header */}
+                    <button
+                      onClick={() =>
+                        setExpandedActivityId(isExpanded ? null : (activity.id || null))
+                      }
+                      className="w-full p-4 flex items-start gap-3 hover:bg-[oklch(0.98_0.001_286)] transition-colors text-left"
+                    >
+                      <div className={`w-10 h-10 rounded-lg ${config.color} flex items-center justify-center flex-shrink-0`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-[oklch(0.22_0.08_220)] truncate">
+                          {activity.title}
+                        </p>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-[oklch(0.55_0.05_220)]">
+                          {activity.time && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {activity.time}
+                            </span>
+                          )}
+                          {activity.cost && (
+                            <span className="flex items-center gap-1 font-['DM_Mono']">
+                              <DollarSign className="w-3 h-3" />
+                              {activity.cost}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-[oklch(0.55_0.05_220)]" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-[oklch(0.55_0.05_220)]" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Expanded content */}
+                    {isExpanded && (
+                      <div className="border-t border-[oklch(0.94_0.008_220)] p-4 bg-[oklch(0.98_0.001_286)] space-y-3">
+                        {activity.address && (
+                          <div>
+                            <p className="text-xs text-[oklch(0.55_0.05_220)] mb-1">地址</p>
+                            <p className="text-sm text-[oklch(0.22_0.08_220)]">{activity.address}</p>
+                          </div>
+                        )}
+
+                        {activity.duration && (
+                          <div>
+                            <p className="text-xs text-[oklch(0.55_0.05_220)] mb-1">時長</p>
+                            <p className="text-sm text-[oklch(0.22_0.08_220)]">{activity.duration} 分鐘</p>
+                          </div>
+                        )}
+
+                        {activity.notes && (
+                          <div>
+                            <p className="text-xs text-[oklch(0.55_0.05_220)] mb-1">備註</p>
+                            <p className="text-sm text-[oklch(0.22_0.08_220)]">{activity.notes}</p>
+                          </div>
+                        )}
+
+                        {activity.lat && activity.lng && (
+                          <MapPreview lat={activity.lat} lng={activity.lng} />
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            onClick={() => openEditActivity(activity)}
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 border-[oklch(0.88_0.008_220)] gap-1"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            編輯
+                          </Button>
+                          <Button
+                            onClick={() => setDeletingActivity(activity)}
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 border-red-200 text-red-600 hover:bg-red-50 gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            刪除
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </AnimatePresence>
+        )}
+      </main>
 
       {/* ===== Add/Edit Activity Dialog ===== */}
       <Dialog open={showAddActivity} onOpenChange={setShowAddActivity}>
@@ -690,200 +741,22 @@ export default function TripDetail() {
       <AlertDialog open={!!deletingActivity} onOpenChange={() => setDeletingActivity(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>確定要刪除此活動？</AlertDialogTitle>
+            <AlertDialogTitle>確認刪除</AlertDialogTitle>
             <AlertDialogDescription>
-              「{deletingActivity?.title}」將被永久刪除。
+              確定要刪除「{deletingActivity?.title}」嗎？此操作無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteActivity}
-              className="bg-red-500 hover:bg-red-600 text-white"
+              className="bg-red-600 hover:bg-red-700"
             >
-              確定刪除
+              刪除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-// Activity Card Component
-function ActivityCard({
-  activity,
-  index,
-  currency,
-  isDragging,
-  isDragOver,
-  onEdit,
-  onDelete,
-}: {
-  activity: Activity;
-  index: number;
-  currency?: string;
-  isDragging?: boolean;
-  isDragOver?: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const config = categoryConfig[activity.category];
-  const Icon = config.icon;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-      className="flex gap-4"
-    >
-      {/* Timeline dot */}
-      <div className="flex flex-col items-center flex-shrink-0 pt-3">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center z-10 ${config.color}`}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-
-      {/* Card */}
-      <div className="flex-1 bg-white rounded-xl border border-[oklch(0.92_0.008_220)] overflow-hidden hover:shadow-md transition-shadow duration-200 mb-2">
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-start gap-2 flex-1 min-w-0">
-              <div className="mt-1 cursor-grab active:cursor-grabbing text-[oklch(0.65_0.05_220)] hover:text-[oklch(0.55_0.05_220)] transition-colors flex-shrink-0">
-                <GripVertical className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-[oklch(0.22_0.08_220)]">{activity.title}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${config.color}`}>
-                  {config.label}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-[oklch(0.55_0.05_220)]">
-                {activity.time && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    <span className="font-['DM_Mono']">{activity.time}</span>
-                    {activity.duration && (
-                      <span className="text-[oklch(0.72_0.05_220)]">({activity.duration} 分鐘)</span>
-                    )}
-                  </div>
-                )}
-                {activity.location && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    <span>{activity.location}</span>
-                  </div>
-                )}
-                {activity.cost !== undefined && activity.cost > 0 && (
-                  <div className="flex items-center gap-1 text-[oklch(0.62_0.12_220)] font-medium">
-                    <DollarSign className="w-3 h-3" />
-                    <span className="font-['DM_Mono']">{activity.cost.toLocaleString()} {currency || "TWD"}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            </div>
-
-            <div className="flex items-center gap-1">
-              {(activity.notes || activity.address || (activity as any).lat) && (
-                <button
-                  onClick={() => setExpanded(!expanded)}
-                  className="w-7 h-7 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.65_0.05_220)] transition-colors"
-                >
-                  {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="w-7 h-7 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.65_0.05_220)] transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onEdit} className="gap-2">
-                    <Edit3 className="w-4 h-4" />
-                    編輯
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onDelete} className="gap-2 text-red-600">
-                    <Trash2 className="w-4 h-4" />
-                    刪除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-
-          {/* Expandable details */}
-          <AnimatePresence>
-            {expanded && (activity.notes || activity.address || (activity as any).lat) && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 pt-3 border-t border-[oklch(0.94_0.008_220)] space-y-3">
-                  {(activity as any).lat && (activity as any).lng && (
-                    <MapPreview
-                      lat={(activity as any).lat}
-                      lng={(activity as any).lng}
-                      title={activity.location}
-                      address={activity.address}
-                      compact
-                    />
-                  )}
-                  {activity.address && !(activity as any).lat && (
-                    <div className="flex items-start gap-2 text-xs text-[oklch(0.55_0.05_220)]">
-                      <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                      <span>{activity.address}</span>
-                    </div>
-                  )}
-                  {activity.notes && (
-                    <div className="flex items-start gap-2 text-xs text-[oklch(0.55_0.05_220)]">
-                      <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                      <span>{activity.notes}</span>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// Day empty state
-function DayEmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center py-16 text-center"
-    >
-      <div className="w-16 h-16 rounded-2xl bg-[oklch(0.94_0.008_220)] flex items-center justify-center mb-4">
-        <Calendar className="w-8 h-8 text-[oklch(0.72_0.06_220)]" />
-      </div>
-      <h3 className="font-['Playfair_Display'] text-lg font-bold text-[oklch(0.35_0.06_220)] mb-2">
-        這天還沒有安排
-      </h3>
-      <p className="text-[oklch(0.55_0.05_220)] text-sm mb-5">
-        新增景點、餐廳或住宿，開始規劃這天的行程
-      </p>
-      <Button
-        onClick={onAdd}
-        variant="outline"
-        className="border-[oklch(0.82_0.06_220)] text-[oklch(0.62_0.12_220)] gap-2"
-      >
-        <Plus className="w-4 h-4" />
-        新增第一個活動
-      </Button>
-    </motion.div>
   );
 }
