@@ -197,10 +197,14 @@ export default function TripDetail() {
   });
 
   // Select appropriate result based on device
-  const dragResult = isMobile ? touchDragResult : desktopDragResult;
+  const dragResult = useMemo(() => isMobile ? touchDragResult : desktopDragResult, [isMobile, touchDragResult, desktopDragResult]);
   const { sortedItems, draggingId, dragOverId, isReordering } = dragResult;
-  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined };
-  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined };
+  
+  const touchHandlers = useMemo(() => isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined }, [isMobile, touchDragResult]);
+  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = touchHandlers;
+  
+  const desktopHandlers = useMemo(() => !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined }, [isMobile, desktopDragResult]);
+  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = desktopHandlers;
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
