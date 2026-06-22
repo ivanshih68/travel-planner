@@ -1,7 +1,9 @@
 /**
  * useTouchDragSort — Touch-enabled drag-and-drop sorting hook
- * Supports both pointer events (desktop + touch) and fallback to mouse events
- * Handles visual feedback, animation, and reordering logic
+ * Supports Pointer Events (desktop + touch)
+ *
+ * Fix: onReorder/onError stored in refs so they never appear in dependency
+ * arrays; useEffect syncs items with deep comparison to avoid infinite loops.
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -33,197 +35,158 @@ export function useTouchDragSort<T>({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [isReordering, setIsReordering] = useState(false);
-  const [touchState, setTouchState] = useState<TouchState | null>(null);
-  const [dragImage, setDragImage] = useState<HTMLElement | null>(null);
-  const [dragOffset, setDragOffset] = useState(0);
 
-  const draggingItemRef = useRef<DragItem<T> | null>(null);
-  const containerRef = useRef<HTMLElement | null>(null);
+  const touchStateRef = useRef<TouchState | null>(null);
+  const draggingIdRef = useRef<string | null>(null);
+  const dragOverIdRef = useRef<string | null>(null);
+  const dragOffsetRef = useRef(0);
   const dragImageRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync items when props change - only update if items actually changed
+  // Stable refs for callbacks — prevents them from appearing in dep arrays
+  const onReorderRef = useRef(onReorder);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onReorderRef.current = onReorder; }, [onReorder]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  // Sync items only when content actually changes (deep compare by id+order)
   useEffect(() => {
-    // Check if items reference changed (not just content)
-    // This prevents unnecessary updates when the same items are passed
     setSortedItems((prev) => {
-      // If lengths differ, definitely update
       if (prev.length !== items.length) return items;
-      // If any id changed, update
       for (let i = 0; i < items.length; i++) {
         if (prev[i]?.id !== items[i]?.id || prev[i]?.order !== items[i]?.order) {
           return items;
         }
       }
-      // Otherwise keep previous state to avoid unnecessary renders
-      return prev;
+      return prev; // identical content → no state update
     });
   }, [items]);
 
-  /**
-   * Handle pointer/touch start
-   */
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, item: DragItem<T>) => {
-      // Only handle left mouse button or touch
       if (e.button !== undefined && e.button !== 0) return;
-
       e.preventDefault();
-      setDraggingId(item.id);
-      draggingItemRef.current = item;
 
       const element = e.currentTarget as HTMLElement;
-      containerRef.current = element;
-
-      // Get initial position
       const rect = element.getBoundingClientRect();
-      const startY = e.clientY || (e as any).touches?.[0]?.clientY || 0;
+      const startY = e.clientY;
 
-      setTouchState({
-        startY,
-        currentY: startY,
-        offsetY: 0,
-      });
+      draggingIdRef.current = item.id;
+      setDraggingId(item.id);
 
-      // Create drag image for visual feedback
+      touchStateRef.current = { startY, currentY: startY, offsetY: 0 };
+      dragOffsetRef.current = startY - rect.top;
+
+      // Create floating drag clone
       const clone = element.cloneNode(true) as HTMLDivElement;
       clone.style.position = "fixed";
       clone.style.pointerEvents = "none";
-      clone.style.opacity = "0.7";
+      clone.style.opacity = "0.75";
       clone.style.zIndex = "9999";
       clone.style.left = `${rect.left}px`;
-      clone.style.top = `${startY}px`;
+      clone.style.top = `${startY - dragOffsetRef.current}px`;
       clone.style.width = `${rect.width}px`;
-      clone.style.boxShadow = "0 10px 25px rgba(0, 0, 0, 0.15)";
+      clone.style.boxShadow = "0 10px 25px rgba(0,0,0,0.15)";
       clone.style.transform = "scale(1.02)";
       document.body.appendChild(clone);
       dragImageRef.current = clone;
-      setDragImage(clone);
-
-      // Set drag offset for smooth dragging
-      setDragOffset(startY - rect.top);
     },
     []
   );
 
-  /**
-   * Handle pointer/touch move
-   */
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, item: DragItem<T>) => {
-      if (!draggingId || !touchState || !dragImageRef.current) return;
-
+      if (!draggingIdRef.current || !touchStateRef.current || !dragImageRef.current) return;
       e.preventDefault();
 
-      const currentY = e.clientY || (e as any).touches?.[0]?.clientY || 0;
-      const offsetY = currentY - touchState.startY;
+      const currentY = e.clientY;
+      touchStateRef.current = {
+        ...touchStateRef.current,
+        currentY,
+        offsetY: currentY - touchStateRef.current.startY,
+      };
 
-      setTouchState((prev) =>
-        prev ? { ...prev, currentY, offsetY } : null
-      );
+      // Move the floating clone
+      dragImageRef.current.style.top = `${currentY - dragOffsetRef.current}px`;
 
-      // Update drag image position
-      dragImageRef.current.style.top = `${currentY - dragOffset}px`;
-
-      // Check if hovering over another item
-      const rect = e.currentTarget.getBoundingClientRect();
-      const itemCenter = rect.top + rect.height / 2;
-
-      if (currentY > itemCenter && item.id !== draggingId) {
-        setDragOverId(item.id);
-      } else if (currentY < itemCenter && item.id !== draggingId) {
-        setDragOverId(item.id);
+      // Determine which item we're hovering over
+      if (item.id !== draggingIdRef.current) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const itemCenter = rect.top + rect.height / 2;
+        if (Math.abs(currentY - itemCenter) < rect.height / 2) {
+          dragOverIdRef.current = item.id;
+          setDragOverId(item.id);
+        }
       }
     },
-    [draggingId, touchState, dragOffset]
+    []
   );
 
-  /**
-   * Handle pointer/touch end
-   */
   const handlePointerUp = useCallback(
-    async (e: React.PointerEvent<HTMLDivElement>, item: DragItem<T>) => {
-      if (!draggingId || !touchState) return;
-
+    async (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!draggingIdRef.current) return;
       e.preventDefault();
 
-      // Clean up drag image
+      // Clean up clone
       if (dragImageRef.current) {
         dragImageRef.current.remove();
         dragImageRef.current = null;
       }
 
-      setDragImage(null);
+      const currentDraggingId = draggingIdRef.current;
+      const currentDragOverId = dragOverIdRef.current;
+
+      // Reset refs before async work
+      draggingIdRef.current = null;
+      dragOverIdRef.current = null;
+      touchStateRef.current = null;
+      setDraggingId(null);
       setDragOverId(null);
 
-      if (dragOverId && dragOverId !== draggingId) {
-        // Use functional update to avoid dependency on sortedItems
+      if (currentDragOverId && currentDragOverId !== currentDraggingId) {
+        setIsReordering(true);
+
         setSortedItems((prevItems) => {
+          const draggedIndex = prevItems.findIndex((i) => i.id === currentDraggingId);
+          const targetIndex = prevItems.findIndex((i) => i.id === currentDragOverId);
+
+          if (draggedIndex === -1 || targetIndex === -1) return prevItems;
+
           const newItems = [...prevItems];
-          const draggedIndex = newItems.findIndex((i) => i.id === draggingId);
-          const targetIndex = newItems.findIndex((i) => i.id === dragOverId);
+          const [movedItem] = newItems.splice(draggedIndex, 1);
+          newItems.splice(targetIndex, 0, movedItem);
 
-          if (draggedIndex !== -1 && targetIndex !== -1) {
-            // Swap items
-            [newItems[draggedIndex], newItems[targetIndex]] = [
-              newItems[targetIndex],
-              newItems[draggedIndex],
-            ];
+          const reorderedItems = newItems.map((item, idx) => ({ ...item, order: idx }));
 
-            // Recalculate order
-            const reorderedItems = newItems.map((item, idx) => ({
-              ...item,
-              order: idx,
-            }));
+          // Persist via stable ref — no closure over sortedItems
+          onReorderRef.current(reorderedItems)
+            .catch((error) => {
+              const err = error instanceof Error ? error : new Error("Reorder failed");
+              onErrorRef.current?.(err);
+              setSortedItems(prevItems); // rollback
+            })
+            .finally(() => setIsReordering(false));
 
-            // Persist to Firebase
-            setIsReordering(true);
-            onReorder(reorderedItems)
-              .catch((error) => {
-                // Rollback on error
-                setSortedItems(prevItems);
-                if (onError) {
-                  onError(
-                    error instanceof Error
-                      ? error
-                      : new Error("Failed to reorder items")
-                  );
-                }
-              })
-              .finally(() => {
-                setIsReordering(false);
-              });
-
-            return reorderedItems;
-          }
-          return newItems;
+          return reorderedItems;
         });
       }
-
-      setDraggingId(null);
-      draggingItemRef.current = null;
-      setTouchState(null);
     },
-    [draggingId, dragOverId, touchState, onReorder, onError]
+    []
   );
 
-  /**
-   * Handle pointer leave (cancel drag)
-   */
   const handlePointerLeave = useCallback(() => {
-    if (!draggingId) return;
+    if (!draggingIdRef.current) return;
 
-    // Clean up drag image
     if (dragImageRef.current) {
       dragImageRef.current.remove();
       dragImageRef.current = null;
     }
 
-    setDragImage(null);
-    setDragOverId(null);
+    draggingIdRef.current = null;
+    dragOverIdRef.current = null;
+    touchStateRef.current = null;
     setDraggingId(null);
-    draggingItemRef.current = null;
-    setTouchState(null);
-  }, [draggingId]);
+    setDragOverId(null);
+  }, []);
 
   return {
     sortedItems,

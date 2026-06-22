@@ -1,12 +1,10 @@
 /**
- * useDragSort — Drag and drop reordering hook
+ * useDragSort — Drag and drop reordering hook (Desktop HTML5 drag API)
  * Design: Coastal Morning theme
- * 
- * Features:
- * - Smooth drag animations
- * - Visual feedback during drag
- * - Automatic order persistence
- * - Mobile and desktop support
+ *
+ * Fix: useEffect now deep-compares items before calling setSortedItems,
+ * preventing infinite loops when parent re-renders with structurally
+ * identical (but referentially new) arrays.
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -35,18 +33,30 @@ export const useDragSort = <T,>({
   const dragSourceRef = useRef<DragItem<T> | null>(null);
   const dragImageRef = useRef<HTMLElement | null>(null);
 
-  // Update sorted items when input items change
+  // Stable refs for callbacks — avoids re-creating handlers on every render
+  const onReorderRef = useRef(onReorder);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onReorderRef.current = onReorder; }, [onReorder]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  // Sync items only when content actually changes (deep compare by id+order)
   useEffect(() => {
-    setSortedItems(items);
+    setSortedItems((prev) => {
+      if (prev.length !== items.length) return items;
+      for (let i = 0; i < items.length; i++) {
+        if (prev[i]?.id !== items[i]?.id || prev[i]?.order !== items[i]?.order) {
+          return items;
+        }
+      }
+      return prev; // same content → keep reference, no re-render
+    });
   }, [items]);
 
-  // Handle drag start
   const handleDragStart = useCallback(
     (e: React.DragEvent<HTMLDivElement>, item: DragItem<T>, element: HTMLElement) => {
       setDraggingId(item.id);
       dragSourceRef.current = item;
 
-      // Create custom drag image
       const dragImage = element.cloneNode(true) as HTMLElement;
       dragImage.style.position = "absolute";
       dragImage.style.top = "-9999px";
@@ -60,7 +70,6 @@ export const useDragSort = <T,>({
     []
   );
 
-  // Handle drag over
   const handleDragOver = useCallback(
     (e: React.DragEvent<HTMLDivElement>, targetItem: DragItem<T>) => {
       e.preventDefault();
@@ -70,12 +79,10 @@ export const useDragSort = <T,>({
     []
   );
 
-  // Handle drag leave
   const handleDragLeave = useCallback(() => {
     setDragOverId(null);
   }, []);
 
-  // Handle drop
   const handleDrop = useCallback(
     async (e: React.DragEvent<HTMLDivElement>, targetItem: DragItem<T>) => {
       e.preventDefault();
@@ -89,45 +96,39 @@ export const useDragSort = <T,>({
 
       setIsReordering(true);
 
-      try {
-        // Find indices
-        const sourceIndex = sortedItems.findIndex((item) => item.id === dragSourceRef.current!.id);
-        const targetIndex = sortedItems.findIndex((item) => item.id === targetItem.id);
+      // Use functional update to read latest sortedItems without adding it as dep
+      setSortedItems((prevItems) => {
+        const sourceIndex = prevItems.findIndex((i) => i.id === dragSourceRef.current!.id);
+        const targetIndex = prevItems.findIndex((i) => i.id === targetItem.id);
 
-        if (sourceIndex === -1 || targetIndex === -1) {
-          throw new Error("Item not found");
-        }
+        if (sourceIndex === -1 || targetIndex === -1) return prevItems;
 
-        // Create new sorted array
-        const newItems = [...sortedItems];
+        const newItems = [...prevItems];
         const [movedItem] = newItems.splice(sourceIndex, 1);
         newItems.splice(targetIndex, 0, movedItem);
 
-        // Update order property
-        const reorderedItems = newItems.map((item, index) => ({
-          ...item,
-          order: index,
-        }));
+        const reorderedItems = newItems.map((item, index) => ({ ...item, order: index }));
 
-        setSortedItems(reorderedItems);
+        // Persist asynchronously using stable ref
+        onReorderRef.current(reorderedItems)
+          .catch((error) => {
+            const err = error instanceof Error ? error : new Error("Reorder failed");
+            onErrorRef.current?.(err);
+            // Revert on error
+            setSortedItems(prevItems);
+          })
+          .finally(() => {
+            setIsReordering(false);
+            setDraggingId(null);
+            setDragOverId(null);
+          });
 
-        // Persist to backend
-        await onReorder(reorderedItems);
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error("Reorder failed");
-        onError?.(err);
-        // Revert on error
-        setSortedItems(items);
-      } finally {
-        setIsReordering(false);
-        setDraggingId(null);
-        setDragOverId(null);
-      }
+        return reorderedItems;
+      });
     },
-    [sortedItems, items, onReorder, onError]
+    [] // no external deps — reads everything via refs or functional updates
   );
 
-  // Handle drag end
   const handleDragEnd = useCallback(() => {
     if (dragImageRef.current) {
       document.body.removeChild(dragImageRef.current);

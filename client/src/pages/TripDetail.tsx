@@ -142,7 +142,10 @@ export default function TripDetail() {
     }));
   }, [trip]);
 
-  const currentDayActivities = activitiesByDay[selectedDay] || [];
+  const currentDayActivities = useMemo(
+    () => activitiesByDay[selectedDay] || [],
+    [activitiesByDay, selectedDay]
+  );
 
   // Drag and drop sorting - memoize to prevent infinite update loop
   const dragSortItems = useMemo(() => {
@@ -154,47 +157,37 @@ export default function TripDetail() {
     }));
   }, [activitiesByDay, selectedDay]);
 
+  // Stable reorder callback — useCallback so the reference never changes
+  const handleReorder = useCallback(async (reorderedItems: { id: string; order: number }[]) => {
+    try {
+      await Promise.all(
+        reorderedItems.map((item) =>
+          updateActivity(item.id, { order: item.order })
+        )
+      );
+      toast.success("活動順序已更新");
+    } catch (error) {
+      toast.error("更新順序失敗");
+      throw error;
+    }
+  }, []);
+
+  const handleReorderError = useCallback((error: Error) => {
+    console.error("Drag sort error:", error);
+    toast.error("排序失敗，請稍後再試");
+  }, []);
+
   // Use appropriate drag sort hook based on device
   const touchDragResult = useTouchDragSort({
     items: dragSortItems,
-    onReorder: async (reorderedItems) => {
-      try {
-        await Promise.all(
-          reorderedItems.map((item) =>
-            updateActivity(item.id, { order: item.order })
-          )
-        );
-        toast.success("活動順序已更新");
-      } catch (error) {
-        toast.error("更新順序失敗");
-        throw error;
-      }
-    },
-    onError: (error) => {
-      console.error("Touch drag sort error:", error);
-      toast.error("排序失敗，請稍後再試");
-    },
+    onReorder: handleReorder,
+    onError: handleReorderError,
   });
 
   const desktopDragResult = useDragSort({
     items: dragSortItems,
-    onReorder: async (reorderedItems) => {
-      try {
-        await Promise.all(
-          reorderedItems.map((item) =>
-            updateActivity(item.id, { order: item.order })
-          )
-        );
-        toast.success("活動順序已更新");
-      } catch (error) {
-        toast.error("更新順序失敗");
-        throw error;
-      }
-    },
-    onError: (error) => {
-      console.error("Drag sort error:", error);
-      toast.error("排序失敗，請稍後再試");
-    },
+    onReorder: handleReorder,
+    onError: handleReorderError,
   });
 
   // Select appropriate result based on device
@@ -500,7 +493,7 @@ export default function TripDetail() {
                         draggable={!isMobile}
                         onPointerDown={isMobile ? (e) => handlePointerDown?.(e, item) : undefined}
                         onPointerMove={isMobile ? (e) => handlePointerMove?.(e, item) : undefined}
-                        onPointerUp={isMobile ? (e) => handlePointerUp?.(e, item) : undefined}
+                        onPointerUp={isMobile ? (e) => handlePointerUp?.(e) : undefined}
                         onPointerLeave={isMobile ? handlePointerLeave : undefined}
                         onDragStart={!isMobile ? (e) => {
                           const el = (e.currentTarget as HTMLElement);
