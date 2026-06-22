@@ -3,9 +3,12 @@
  * Design: Coastal Morning — Left sidebar + main content area
  * Desktop: Fixed sidebar with nav + trip cards grid
  * Mobile: Bottom nav + full-screen cards
+ *
+ * Features added:
+ * - Cover image upload per trip card (base64 stored in Firestore)
  */
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,6 +25,8 @@ import {
   ChevronRight,
   Plane,
   Globe,
+  Camera,
+  ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays, parseISO } from "date-fns";
@@ -38,14 +43,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTrips } from "@/hooks/useTrips";
-import { createTrip, deleteTrip, logout, type Trip } from "@/lib/firebase";
+import { createTrip, updateTrip, deleteTrip, logout, type Trip } from "@/lib/firebase";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 const CARD_IMG_1 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/travel-card-1-5S2pMWQ95V9wp6iGv7j3yH.webp";
 const CARD_IMG_2 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/travel-card-2-6bszyXBiNQ9zQQmFK3CWui.webp";
 const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/hero-travel-fcqx36i6AkJoWerUJTQQw4.webp";
 
-// Cycle through card images for visual variety
+// Cycle through card images for visual variety (fallback when no custom cover)
 const CARD_IMAGES = [CARD_IMG_1, CARD_IMG_2, HERO_IMG];
 
 const statusConfig = {
@@ -65,6 +70,29 @@ interface NewTripForm {
   budget: string;
   currency: string;
   status: "planning" | "ongoing" | "completed";
+}
+
+/** Compress image to JPEG data-URL under ~200 KB */
+function compressImage(file: File, maxPx = 800, quality = 0.75): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target!.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function Dashboard() {
@@ -328,7 +356,7 @@ export default function Dashboard() {
                 <TripCard
                   key={trip.id}
                   trip={trip}
-                  coverImage={CARD_IMAGES[index % CARD_IMAGES.length]}
+                  fallbackImage={CARD_IMAGES[index % CARD_IMAGES.length]}
                   onOpen={() => setLocation(`/trip/${trip.id}`)}
                   onDelete={() => setDeletingTrip(trip)}
                 />
@@ -372,31 +400,31 @@ export default function Dashboard() {
             <div className="p-6">
               <h2 className="font-['Playfair_Display'] text-2xl font-bold text-[oklch(0.22_0.08_220)] mb-6">個人資料</h2>
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-[oklch(0.92_0.008_220)]">
-                <div className="flex items-center gap-4 mb-5">
+                <div className="flex items-center gap-4 mb-4">
                   <div className="w-14 h-14 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-xl font-bold">
-                    {user?.displayName?.[0]?.toUpperCase() || "U"}
+                    {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
                   </div>
                   <div>
-                    <p className="font-semibold text-[oklch(0.25_0.08_220)]">{user?.displayName || "旅行者"}</p>
-                    <p className="text-sm text-[oklch(0.52_0.05_220)]">{user?.email}</p>
+                    <p className="font-semibold text-[oklch(0.22_0.08_220)]">{user?.displayName || "旅行者"}</p>
+                    <p className="text-sm text-[oklch(0.55_0.05_220)]">{user?.email}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="grid grid-cols-2 gap-3 mb-4">
                   {[
-                    { label: "總行程", value: stats.total },
+                    { label: "全部行程", value: stats.total },
                     { label: "規劃中", value: stats.planning },
                     { label: "進行中", value: stats.ongoing },
                     { label: "已完成", value: stats.completed },
                   ].map((s) => (
-                    <div key={s.label} className="bg-[oklch(0.96_0.008_220)] rounded-xl p-3 text-center">
-                      <p className="text-2xl font-bold font-['DM_Mono'] text-[oklch(0.62_0.12_220)]">{s.value}</p>
-                      <p className="text-xs text-[oklch(0.52_0.05_220)] mt-0.5">{s.label}</p>
+                    <div key={s.label} className="bg-[oklch(0.97_0.015_80)] rounded-xl p-3 text-center">
+                      <p className="text-2xl font-bold font-['DM_Mono'] text-[oklch(0.22_0.08_220)]">{s.value}</p>
+                      <p className="text-xs text-[oklch(0.55_0.05_220)] mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
                 <Button
-                  variant="outline"
                   onClick={handleLogout}
+                  variant="outline"
                   className="w-full border-red-200 text-red-600 hover:bg-red-50 gap-2"
                 >
                   <LogOut className="w-4 h-4" />
@@ -558,15 +586,15 @@ export default function Dashboard() {
   );
 }
 
-// Trip Card Component
+// Trip Card Component — supports custom cover image upload
 function TripCard({
   trip,
-  coverImage,
+  fallbackImage,
   onOpen,
   onDelete,
 }: {
   trip: Trip;
-  coverImage: string;
+  fallbackImage: string;
   onOpen: () => void;
   onDelete: () => void;
 }) {
@@ -576,6 +604,11 @@ function TripCard({
     ? differenceInDays(parseISO(trip.endDate), parseISO(trip.startDate)) + 1
     : 0;
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const coverSrc = trip.coverImage || fallbackImage;
+
   const formatDate = (dateStr: string) => {
     try {
       return format(parseISO(dateStr), "yyyy.MM.dd");
@@ -583,6 +616,31 @@ function TripCard({
       return dateStr;
     }
   };
+
+  const handleCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !trip.id) return;
+
+    // Validate type
+    if (!file.type.startsWith("image/")) {
+      toast.error("請選擇圖片檔案");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const dataUrl = await compressImage(file, 900, 0.78);
+      await updateTrip(trip.id, { coverImage: dataUrl });
+      toast.success("封面圖已更新");
+    } catch (err) {
+      console.error(err);
+      toast.error("上傳失敗，請稍後再試");
+    } finally {
+      setIsUploading(false);
+      // Reset so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [trip.id]);
 
   return (
     <motion.div
@@ -596,7 +654,7 @@ function TripCard({
       {/* Cover image */}
       <div className="relative h-44 overflow-hidden">
         <img
-          src={coverImage}
+          src={coverSrc}
           alt={trip.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
@@ -608,18 +666,52 @@ function TripCard({
           {status.label}
         </div>
 
-        {/* Delete button */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/30 hover:bg-red-500 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-150 active:scale-[0.9]"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        {/* Action buttons (top-right) */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-150">
+          {/* Upload cover button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+            disabled={isUploading}
+            title="更換封面圖"
+            className="w-7 h-7 rounded-full bg-black/40 hover:bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white transition-all duration-150 active:scale-[0.9]"
+          >
+            {isUploading ? (
+              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Camera className="w-3.5 h-3.5" />
+            )}
+          </button>
+          {/* Delete button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            title="刪除行程"
+            className="w-7 h-7 rounded-full bg-black/30 hover:bg-red-500 flex items-center justify-center text-white transition-all duration-150 active:scale-[0.9]"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleCoverUpload}
+        />
 
         {/* Duration badge */}
         {duration > 0 && (
           <div className="absolute bottom-3 right-3 bg-black/40 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg font-['DM_Mono']">
             {duration} 天
+          </div>
+        )}
+
+        {/* Custom cover indicator */}
+        {trip.coverImage && (
+          <div className="absolute bottom-3 left-3 bg-black/30 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg flex items-center gap-1">
+            <ImagePlus className="w-3 h-3" />
+            自訂封面
           </div>
         )}
       </div>

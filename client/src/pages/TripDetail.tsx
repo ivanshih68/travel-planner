@@ -30,6 +30,8 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { AlertTriangle } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { zhTW } from "date-fns/locale";
 
@@ -200,6 +202,50 @@ export default function TripDetail() {
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
+
+  // ── Time conflict detection ──────────────────────────────────────────────
+  // Returns a Set of activity IDs that overlap with at least one other activity
+  const conflictingIds = useMemo(() => {
+    const withTime = currentDayActivities.filter((a) => a.time && a.duration);
+    const conflicted = new Set<string>();
+    for (let i = 0; i < withTime.length; i++) {
+      for (let j = i + 1; j < withTime.length; j++) {
+        const a = withTime[i];
+        const b = withTime[j];
+        const toMinutes = (t: string) => {
+          const [h, m] = t.split(":").map(Number);
+          return h * 60 + m;
+        };
+        const aStart = toMinutes(a.time!);
+        const aEnd = aStart + (a.duration || 0);
+        const bStart = toMinutes(b.time!);
+        const bEnd = bStart + (b.duration || 0);
+        if (aStart < bEnd && aEnd > bStart) {
+          if (a.id) conflicted.add(a.id);
+          if (b.id) conflicted.add(b.id);
+        }
+      }
+    }
+    return conflicted;
+  }, [currentDayActivities]);
+
+  // ── Cost breakdown by category (all days) ───────────────────────────────
+  const costByCategory = useMemo(() => {
+    const PIE_COLORS: Record<string, string> = {
+      attraction: "oklch(0.62 0.12 220)",
+      restaurant: "oklch(0.72 0.14 35)",
+      hotel: "oklch(0.62 0.10 300)",
+      transport: "oklch(0.55 0.14 145)",
+      other: "oklch(0.60 0.03 220)",
+    };
+    return Object.entries(categoryConfig)
+      .map(([key, cfg]) => ({
+        name: cfg.label,
+        value: activities.filter((a) => a.category === key).reduce((s, a) => s + (a.cost || 0), 0),
+        color: PIE_COLORS[key],
+      }))
+      .filter((d) => d.value > 0);
+  }, [activities]);
 
   const openAddActivity = () => {
     setEditingActivity(null);
@@ -431,6 +477,57 @@ export default function TripDetail() {
                   })}
                 </div>
               </div>
+
+              {/* Cost pie chart */}
+              {costByCategory.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest mb-3 font-['DM_Mono']">
+                    費用分類
+                  </p>
+                  <div className="h-36">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={costByCategory}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={32}
+                          outerRadius={56}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {costByCategory.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} stroke="transparent" />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number) => [
+                            `${value.toLocaleString()} ${trip?.currency || "TWD"}`,
+                            "",
+                          ]}
+                          contentStyle={{
+                            fontSize: 12,
+                            borderRadius: 8,
+                            border: "1px solid oklch(0.92 0.008 220)",
+                            padding: "6px 10px",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-1.5 mt-2">
+                    {costByCategory.map((d) => (
+                      <div key={d.name} className="flex items-center gap-2 text-xs">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                        <span className="text-[oklch(0.45_0.05_220)] flex-1">{d.name}</span>
+                        <span className="font-['DM_Mono'] font-bold text-[oklch(0.22_0.08_220)]">
+                          {d.value.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </aside>
@@ -517,6 +614,7 @@ export default function TripDetail() {
                           currency={trip?.currency}
                           isDragging={draggingId === item.id}
                           isDragOver={dragOverId === item.id}
+                          hasConflict={conflictingIds.has(item.id)}
                           onEdit={() => openEditActivity(item.data)}
                           onDelete={() => setDeletingActivity(item.data)}
                       />
@@ -710,6 +808,7 @@ function ActivityCard({
   currency,
   isDragging,
   isDragOver,
+  hasConflict,
   onEdit,
   onDelete,
 }: {
@@ -718,6 +817,7 @@ function ActivityCard({
   currency?: string;
   isDragging?: boolean;
   isDragOver?: boolean;
+  hasConflict?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -755,9 +855,15 @@ function ActivityCard({
                 </span>
               </div>
 
+              {hasConflict && (
+                <div className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="font-medium">時間與其他活動重疊</span>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-[oklch(0.55_0.05_220)]">
                 {activity.time && (
-                  <div className="flex items-center gap-1">
+                  <div className={`flex items-center gap-1 ${hasConflict ? "text-amber-600 font-medium" : ""}`}>
                     <Clock className="w-3 h-3" />
                     <span className="font-['DM_Mono']">{activity.time}</span>
                     {activity.duration && (
