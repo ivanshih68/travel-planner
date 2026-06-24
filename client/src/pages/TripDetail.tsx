@@ -52,25 +52,17 @@ import { useTouchDragSort } from "@/hooks/useTouchDragSort";
 import { useIsMobile } from "@/hooks/useMobile";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
-import {
-  createActivity,
-  updateActivity,
-  deleteActivity,
-  getTrip,
-  type Trip,
-  type Activity,
-} from "@/lib/firebase";
+import { tripsApi, type Trip, type Activity } from "@/lib/api";
 import { exportTripToPdf } from "@/lib/exportPdf";
-import { createShareLink, copyShareUrlToClipboard } from "@/lib/shareTrip";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 
-const categoryConfig = {
-  attraction: { label: "景點", icon: Camera, color: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
-  restaurant: { label: "餐廳", icon: Utensils, color: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
-  hotel: { label: "住宿", icon: Hotel, color: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
-  transport: { label: "交通", icon: Bus, color: "bg-green-100 text-green-700", dot: "bg-green-500" },
-  other: { label: "其他", icon: FileText, color: "bg-gray-100 text-gray-700", dot: "bg-gray-400" },
+const categoryConfig: Record<string, { label: string; icon: typeof Camera; color: string; dot: string }> = {
+  ATTRACTION: { label: "景點", icon: Camera, color: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
+  RESTAURANT: { label: "餐廳", icon: Utensils, color: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
+  HOTEL: { label: "住宿", icon: Hotel, color: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
+  TRANSPORT: { label: "交通", icon: Bus, color: "bg-green-100 text-green-700", dot: "bg-green-500" },
+  OTHER: { label: "其他", icon: FileText, color: "bg-gray-100 text-gray-700", dot: "bg-gray-400" },
 };
 
 interface ActivityForm {
@@ -88,7 +80,7 @@ interface ActivityForm {
 
 const defaultActivityForm: ActivityForm = {
   title: "",
-  category: "attraction",
+  category: "ATTRACTION",
   time: "",
   location: "",
   address: "",
@@ -104,7 +96,7 @@ export default function TripDetail() {
   const tripId = params.id;
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const { activities, activitiesByDay, loading } = useActivities(tripId);
+  const { activities, activitiesByDay, loading, createActivity, updateActivity, deleteActivity } = useActivities(tripId);
   const isMobile = useIsMobile();
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -115,15 +107,21 @@ export default function TripDetail() {
   const [deletingActivity, setDeletingActivity] = useState<Activity | null>(null);
   const [form, setForm] = useState<ActivityForm>(defaultActivityForm);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Load trip data
   useEffect(() => {
     if (!tripId) return;
     setTripLoading(true);
-    getTrip(tripId).then((t) => {
-      setTrip(t);
-      setTripLoading(false);
-    });
+    tripsApi.get(tripId)
+      .then(({ data }) => {
+        setTrip(data.trip);
+      })
+      .catch(() => {
+        setTrip(null);
+      })
+      .finally(() => setTripLoading(false));
   }, [tripId]);
 
   // Generate day list
@@ -155,7 +153,7 @@ export default function TripDetail() {
     return activitiesForDay.map((activity) => ({
       id: activity.id || "",
       data: activity,
-      order: activity.order ?? 0,
+      order: activity.sortOrder ?? 0,
     }));
   }, [activitiesByDay, selectedDay]);
 
@@ -164,7 +162,7 @@ export default function TripDetail() {
     try {
       await Promise.all(
         reorderedItems.map((item) =>
-          updateActivity(item.id, { order: item.order })
+          updateActivity(item.id, { sortOrder: item.order })
         )
       );
       toast.success("活動順序已更新");
@@ -172,7 +170,7 @@ export default function TripDetail() {
       toast.error("更新順序失敗");
       throw error;
     }
-  }, []);
+  }, [updateActivity]);
 
   const handleReorderError = useCallback((error: Error) => {
     console.error("Drag sort error:", error);
@@ -241,7 +239,7 @@ export default function TripDetail() {
     return Object.entries(categoryConfig)
       .map(([key, cfg]) => ({
         name: cfg.label,
-        value: activities.filter((a) => a.category === key).reduce((s, a) => s + (a.cost || 0), 0),
+        value: activities.filter((a) => a.category === key.toUpperCase()).reduce((s, a) => s + (a.cost || 0), 0),
         color: PIE_COLORS[key],
       }))
       .filter((d) => d.value > 0);
@@ -257,7 +255,7 @@ export default function TripDetail() {
     setEditingActivity(activity);
     setForm({
       title: activity.title,
-      category: activity.category,
+      category: activity.category as Activity['category'],
       time: activity.time || "",
       location: activity.location || "",
       address: activity.address || "",
@@ -298,13 +296,11 @@ export default function TripDetail() {
       } else {
         await createActivity({
           ...activityData,
-          tripId,
-          userId: user.uid,
           day: selectedDay,
           date: days[selectedDay - 1]?.date
             ? format(days[selectedDay - 1].date, "yyyy-MM-dd")
-            : "",
-          order: currentDayActivities.length,
+            : undefined,
+          sortOrder: currentDayActivities.length,
         });
         toast.success("活動已新增");
       }
@@ -325,6 +321,36 @@ export default function TripDetail() {
       setDeletingActivity(null);
     } catch {
       toast.error("刪除失敗");
+    }
+  };
+
+  // ── Share trip ──────────────────────────────────────────────────────────
+  const handleShareTrip = async () => {
+    if (!tripId) return;
+    setIsSharing(true);
+    try {
+      const { data } = await tripsApi.share(tripId);
+      const shareUrl = `${window.location.origin}/share/${data.shareToken}`;
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("分享連結已複製到剪貼簿！");
+    } catch {
+      toast.error("建立分享連結失敗");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  // ── Export PDF ───────────────────────────────────────────────────────────
+  const handleExportPdf = async () => {
+    if (!trip) return;
+    setIsExporting(true);
+    try {
+      await exportTripToPdf(trip, activitiesByDay);
+      toast.success("PDF 匯出成功！");
+    } catch {
+      toast.error("PDF 匯出失敗");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -371,6 +397,34 @@ export default function TripDetail() {
                 <span className="font-['DM_Mono']">{days.length} 天</span>
               </div>
             </div>
+          </div>
+
+          {/* Header action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleShareTrip}
+              disabled={isSharing}
+              title="分享行程"
+              className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors active:scale-[0.9] disabled:opacity-50"
+            >
+              {isSharing ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4" />
+              )}
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={isExporting}
+              title="匯出 PDF"
+              className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors active:scale-[0.9] disabled:opacity-50"
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+            </button>
           </div>
 
           {/* Trip stats */}
@@ -877,7 +931,7 @@ function ActivityCard({
                     <span>{activity.location}</span>
                   </div>
                 )}
-                {activity.cost !== undefined && activity.cost > 0 && (
+                {activity.cost != null && activity.cost > 0 && (
                   <div className="flex items-center gap-1 text-[oklch(0.62_0.12_220)] font-medium">
                     <DollarSign className="w-3 h-3" />
                     <span className="font-['DM_Mono']">{activity.cost.toLocaleString()} {currency || "TWD"}</span>
@@ -927,12 +981,12 @@ function ActivityCard({
                 className="overflow-hidden"
               >
                 <div className="mt-3 pt-3 border-t border-[oklch(0.94_0.008_220)] space-y-3">
-                  {(activity as any).lat && (activity as any).lng && (
+                  {activity.lat != null && activity.lng != null && (
                     <MapPreview
-                      lat={(activity as any).lat}
-                      lng={(activity as any).lng}
-                      title={activity.location}
-                      address={activity.address}
+                      lat={activity.lat}
+                      lng={activity.lng}
+                      title={activity.location ?? undefined}
+                      address={activity.address ?? undefined}
                       compact
                     />
                   )}

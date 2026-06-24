@@ -5,7 +5,7 @@
 
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { Trip, Activity } from "./firebase";
+import { type Trip, type Activity } from "./api";
 import { format, parseISO } from "date-fns";
 import { zhTW } from "date-fns/locale";
 
@@ -64,7 +64,7 @@ export async function exportTripToPdf(
           ${dayActivities.length === 0 ? '<p style="color: #999;">無安排活動</p>' : ""}
 
           ${dayActivities
-            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
             .map(
               (activity, idx) => `
             <div style="margin: 15px 0; padding: 15px; background-color: #f9fafb; border-left: 4px solid #0891b2; border-radius: 4px;">
@@ -79,7 +79,7 @@ export async function exportTripToPdf(
               ${activity.location ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>地點:</strong> ${activity.location}</p>` : ""}
               ${activity.address ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>地址:</strong> ${activity.address}</p>` : ""}
               ${activity.duration ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>時長:</strong> ${activity.duration} 小時</p>` : ""}
-              ${activity.cost ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>費用:</strong> ${activity.cost.toLocaleString()} ${activity.currency || "USD"}</p>` : ""}
+              ${activity.cost != null && activity.cost > 0 ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>費用:</strong> ${activity.cost.toLocaleString()} ${trip.currency || "TWD"}</p>` : ""}
               ${activity.notes ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>備註:</strong> ${activity.notes}</p>` : ""}
             </div>
           `
@@ -165,12 +165,11 @@ export async function exportTripToPdf(
 
 function getCategoryLabel(category: string): string {
   const labels: { [key: string]: string } = {
-    attraction: "景點",
-    restaurant: "餐廳",
-    accommodation: "住宿",
-    transport: "交通",
-    shopping: "購物",
-    other: "其他",
+    ATTRACTION: "景點", attraction: "景點",
+    RESTAURANT: "餐廳", restaurant: "餐廳",
+    HOTEL: "住宿", hotel: "住宿",
+    TRANSPORT: "交通", transport: "交通",
+    OTHER: "其他", other: "其他",
   };
   return labels[category] || category;
 }

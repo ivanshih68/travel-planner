@@ -43,7 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTrips } from "@/hooks/useTrips";
-import { createTrip, updateTrip, deleteTrip, logout, type Trip } from "@/lib/firebase";
+import { type Trip } from "@/lib/api";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 const CARD_IMG_1 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/travel-card-1-5S2pMWQ95V9wp6iGv7j3yH.webp";
@@ -53,7 +53,11 @@ const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7
 // Cycle through card images for visual variety (fallback when no custom cover)
 const CARD_IMAGES = [CARD_IMG_1, CARD_IMG_2, HERO_IMG];
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
+  PLANNING: { label: "規劃中", color: "bg-amber-100 text-amber-700", icon: Clock },
+  ONGOING: { label: "進行中", color: "bg-green-100 text-green-700", icon: Plane },
+  COMPLETED: { label: "已完成", color: "bg-[oklch(0.92_0.05_220)] text-[oklch(0.35_0.1_220)]", icon: CheckCircle2 },
+  // lowercase fallbacks
   planning: { label: "規劃中", color: "bg-amber-100 text-amber-700", icon: Clock },
   ongoing: { label: "進行中", color: "bg-green-100 text-green-700", icon: Plane },
   completed: { label: "已完成", color: "bg-[oklch(0.92_0.05_220)] text-[oklch(0.35_0.1_220)]", icon: CheckCircle2 },
@@ -96,8 +100,8 @@ function compressImage(file: File, maxPx = 800, quality = 0.75): Promise<string>
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const { trips, loading } = useTrips();
+  const { user, logout } = useAuth();
+  const { trips, loading, createTrip, deleteTrip, uploadCover } = useTrips();
   const [, setLocation] = useLocation();
   const [activeFilter, setActiveFilter] = useState<"all" | "planning" | "ongoing" | "completed">("all");
   const [showNewTrip, setShowNewTrip] = useState(false);
@@ -117,14 +121,14 @@ export default function Dashboard() {
   });
 
   const filteredTrips = trips.filter(
-    (t) => activeFilter === "all" || t.status === activeFilter
+    (t) => activeFilter === "all" || t.status === activeFilter.toUpperCase()
   );
 
   const stats = {
     total: trips.length,
-    planning: trips.filter((t) => t.status === "planning").length,
-    ongoing: trips.filter((t) => t.status === "ongoing").length,
-    completed: trips.filter((t) => t.status === "completed").length,
+    planning: trips.filter((t) => t.status === "PLANNING").length,
+    ongoing: trips.filter((t) => t.status === "ONGOING").length,
+    completed: trips.filter((t) => t.status === "COMPLETED").length,
   };
 
   const handleCreateTrip = async () => {
@@ -137,7 +141,6 @@ export default function Dashboard() {
     setIsCreating(true);
     try {
       await createTrip({
-        userId: user.uid,
         title: form.title,
         destination: form.destination,
         startDate: form.startDate,
@@ -145,7 +148,7 @@ export default function Dashboard() {
         description: form.description,
         budget: form.budget ? parseFloat(form.budget) : undefined,
         currency: form.currency,
-        status: form.status,
+        status: form.status.toUpperCase(),
       });
       toast.success("行程建立成功！開始規劃你的旅程 ✈️");
       setShowNewTrip(false);
@@ -170,8 +173,17 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
+  const handleUploadCover = useCallback(async (tripId: string, file: File) => {
+    try {
+      await uploadCover(tripId, file);
+      toast.success("封面圖已更新");
+    } catch {
+      toast.error("上傳失敗，請稍後再試");
+    }
+  }, [uploadCover]);
+
+  const handleLogout = () => {
+    logout();
     setLocation("/auth");
     toast.success("已登出");
   };
@@ -208,10 +220,10 @@ export default function Dashboard() {
         <div className="p-4 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-sm font-bold">
-              {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
+              {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user?.displayName || "旅行者"}</p>
+              <p className="text-sm font-medium truncate">{user?.name || "旅行者"}</p>
               <p className="text-xs text-white/50 truncate">{user?.email}</p>
             </div>
           </div>
@@ -359,6 +371,7 @@ export default function Dashboard() {
                   fallbackImage={CARD_IMAGES[index % CARD_IMAGES.length]}
                   onOpen={() => setLocation(`/trip/${trip.id}`)}
                   onDelete={() => setDeletingTrip(trip)}
+                  onUploadCover={handleUploadCover}
                 />
               ))}
             </motion.div>
@@ -402,10 +415,10 @@ export default function Dashboard() {
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-[oklch(0.92_0.008_220)]">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-14 h-14 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-xl font-bold">
-                    {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
+                    {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
                   </div>
                   <div>
-                    <p className="font-semibold text-[oklch(0.22_0.08_220)]">{user?.displayName || "旅行者"}</p>
+                    <p className="font-semibold text-[oklch(0.22_0.08_220)]">{user?.name || "旅行者"}</p>
                     <p className="text-sm text-[oklch(0.55_0.05_220)]">{user?.email}</p>
                   </div>
                 </div>
@@ -592,11 +605,13 @@ function TripCard({
   fallbackImage,
   onOpen,
   onDelete,
+  onUploadCover,
 }: {
   trip: Trip;
   fallbackImage: string;
   onOpen: () => void;
   onDelete: () => void;
+  onUploadCover: (tripId: string, file: File) => Promise<void>;
 }) {
   const status = statusConfig[trip.status];
   const StatusIcon = status.icon;
@@ -629,9 +644,7 @@ function TripCard({
 
     setIsUploading(true);
     try {
-      const dataUrl = await compressImage(file, 900, 0.78);
-      await updateTrip(trip.id, { coverImage: dataUrl });
-      toast.success("封面圖已更新");
+      await onUploadCover(trip.id, file);
     } catch (err) {
       console.error(err);
       toast.error("上傳失敗，請稍後再試");

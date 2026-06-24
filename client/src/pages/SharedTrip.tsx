@@ -2,6 +2,7 @@
  * SharedTrip — Read-only shared trip view
  * Design: Coastal Morning — Timeline layout
  * Allows viewing trips without authentication
+ * Uses REST API: GET /api/trips/shared/:token
  */
 
 import { useState, useEffect } from "react";
@@ -18,29 +19,32 @@ import {
   Calendar,
   DollarSign,
   AlertCircle,
+  FileText,
 } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { zhTW } from "date-fns/locale";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-import { getShareLinkByToken } from "@/lib/shareTrip";
-import { getTrip, subscribeToActivities, type Trip, type Activity } from "@/lib/firebase";
-import { MapPreview } from "@/components/MapPreview";
+import { tripsApi, type Trip, type Activity } from "@/lib/api";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 
-const categoryConfig = {
+const categoryConfig: Record<string, { label: string; icon: typeof Camera; color: string }> = {
+  ATTRACTION: { label: "景點", icon: Camera, color: "bg-blue-100 text-blue-700" },
+  RESTAURANT: { label: "餐廳", icon: Utensils, color: "bg-orange-100 text-orange-700" },
+  HOTEL: { label: "住宿", icon: Hotel, color: "bg-purple-100 text-purple-700" },
+  TRANSPORT: { label: "交通", icon: Bus, color: "bg-green-100 text-green-700" },
+  OTHER: { label: "其他", icon: FileText, color: "bg-gray-100 text-gray-700" },
+  // lowercase fallbacks
   attraction: { label: "景點", icon: Camera, color: "bg-blue-100 text-blue-700" },
   restaurant: { label: "餐廳", icon: Utensils, color: "bg-orange-100 text-orange-700" },
-  accommodation: { label: "住宿", icon: Hotel, color: "bg-purple-100 text-purple-700" },
+  hotel: { label: "住宿", icon: Hotel, color: "bg-purple-100 text-purple-700" },
   transport: { label: "交通", icon: Bus, color: "bg-green-100 text-green-700" },
-  shopping: { label: "購物", icon: DollarSign, color: "bg-pink-100 text-pink-700" },
-  other: { label: "其他", icon: MapPin, color: "bg-gray-100 text-gray-700" },
+  other: { label: "其他", icon: FileText, color: "bg-gray-100 text-gray-700" },
 };
 
 export default function SharedTrip() {
@@ -54,46 +58,21 @@ export default function SharedTrip() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState(1);
 
-  // Load shared trip
+  // Load shared trip via REST API
   useEffect(() => {
-    const loadSharedTrip = async () => {
-      try {
-        setLoading(true);
-
-        // Verify share token
-        const shareLink = await getShareLinkByToken(shareToken);
-        if (!shareLink) {
-          setError("分享連結已過期或無效");
-          setLoading(false);
-          return;
-        }
-
-        // Load trip
-        const tripData = await getTrip(shareLink.tripId);
-        if (!tripData) {
-          setError("找不到行程");
-          setLoading(false);
-          return;
-        }
-
-        setTrip(tripData);
-
-        // Subscribe to activities
-        const unsubscribe = subscribeToActivities(shareLink.tripId, (activitiesData) => {
-          setActivities(activitiesData);
-          setLoading(false);
-        });
-
-        return () => unsubscribe();
-      } catch (err) {
+    if (!shareToken) return;
+    setLoading(true);
+    tripsApi.getShared(shareToken)
+      .then(({ data }) => {
+        const { activities: acts, ...tripData } = data.trip;
+        setTrip(tripData as Trip);
+        setActivities(acts || []);
+      })
+      .catch((err) => {
         console.error("Failed to load shared trip:", err);
-        setError("載入行程失敗");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadSharedTrip();
+        setError("分享連結已過期或無效");
+      })
+      .finally(() => setLoading(false));
   }, [shareToken]);
 
   if (loading) {
@@ -115,10 +94,7 @@ export default function SharedTrip() {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error || "找不到行程"}</AlertDescription>
           </Alert>
-          <Button
-            onClick={() => setLocation("/")}
-            className="w-full mt-4"
-          >
+          <Button onClick={() => setLocation("/")} className="w-full mt-4">
             返回首頁
           </Button>
         </Card>
@@ -138,15 +114,14 @@ export default function SharedTrip() {
     date: addDays(startDate, i),
     label: `Day ${i + 1}`,
     dateStr: format(addDays(startDate, i), "M/d", { locale: zhTW }),
-    weekday: format(addDays(startDate, i), "EEE", { locale: zhTW }),
   }));
 
   const currentDayActivities = activities
     .filter((a) => a.day === selectedDay)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-  const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
-  const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
+  const totalCost = activities.reduce((sum, a) => sum + (a.cost ?? 0), 0);
+  const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-teal-50">
@@ -157,12 +132,7 @@ export default function SharedTrip() {
             <img src={LOGO_URL} alt="Voyager" className="w-8 h-8" />
             <h1 className="text-lg font-bold text-foreground">分享行程</h1>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation("/")}
-            className="rounded-full"
-          >
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/")} className="rounded-full">
             <ArrowLeft className="w-5 h-5" />
           </Button>
         </div>
@@ -171,11 +141,7 @@ export default function SharedTrip() {
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8">
         {/* Trip Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <h2 className="text-3xl font-bold text-foreground mb-2">{trip.title}</h2>
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -186,10 +152,12 @@ export default function SharedTrip() {
               <Calendar className="w-4 h-4" />
               {format(startDate, "M月 d日", { locale: zhTW })} - {format(endDate, "M月 d日", { locale: zhTW })}
             </div>
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4" />
-              預算: {trip.budget?.toLocaleString()} {trip.currency || "USD"}
-            </div>
+            {trip.budget != null && (
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
+                預算: {trip.budget.toLocaleString()} {trip.currency || "TWD"}
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -221,7 +189,7 @@ export default function SharedTrip() {
             </Card>
           ) : (
             currentDayActivities.map((activity, index) => {
-              const config = categoryConfig[activity.category as keyof typeof categoryConfig] || categoryConfig.other;
+              const config = categoryConfig[activity.category] || categoryConfig.OTHER;
               const Icon = config.icon;
 
               return (
@@ -252,10 +220,10 @@ export default function SharedTrip() {
                               {config.label}
                             </span>
                           </div>
-                          {activity.cost && (
+                          {activity.cost != null && activity.cost > 0 && (
                             <div className="text-right whitespace-nowrap">
                               <p className="text-sm font-semibold text-blue-600">
-                                {activity.cost.toLocaleString()} {activity.currency || "USD"}
+                                {activity.cost.toLocaleString()} {trip.currency || "TWD"}
                               </p>
                             </div>
                           )}
@@ -266,6 +234,7 @@ export default function SharedTrip() {
                             <div className="flex items-center gap-2">
                               <Clock className="w-4 h-4" />
                               {activity.time}
+                              {activity.duration && <span>（{activity.duration} 分鐘）</span>}
                             </div>
                           )}
                           {activity.location && (
@@ -273,9 +242,6 @@ export default function SharedTrip() {
                               <MapPin className="w-4 h-4" />
                               {activity.location}
                             </div>
-                          )}
-                          {activity.duration && (
-                            <p className="text-xs">時長: {activity.duration} 小時</p>
                           )}
                         </div>
 
@@ -305,9 +271,7 @@ export default function SharedTrip() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">此日費用</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {dayTotalCost.toLocaleString()}
-              </p>
+              <p className="text-2xl font-bold text-blue-600">{dayTotalCost.toLocaleString()}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">總活動數</p>
@@ -315,9 +279,7 @@ export default function SharedTrip() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">總費用</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {totalCost.toLocaleString()}
-              </p>
+              <p className="text-2xl font-bold text-blue-600">{totalCost.toLocaleString()}</p>
             </div>
           </div>
         </motion.div>
