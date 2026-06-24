@@ -13,9 +13,26 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 // ── Middleware ───────────────────────────────────────────
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "https://travel-planner-nine-sigma.vercel.app",
+  "https://travel-planner-fx2m00rs9-novo-projects.vercel.app",
+  // 允許所有 Vercel preview 網域
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      // 允許無 origin（如 curl、Postman）
+      if (!origin) return callback(null, true);
+      // 允許所有 *.vercel.app 子網域
+      if (origin.endsWith(".vercel.app") || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
   })
 );
