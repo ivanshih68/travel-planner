@@ -12,10 +12,9 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio"
   },
-  "packageManager": "pnpm@11.6.0",
+  "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=22",
-    "pnpm": ">=11"
+    "node": ">=18"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
