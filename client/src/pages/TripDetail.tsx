@@ -23,8 +23,6 @@ import {
   Calendar,
   DollarSign,
   FileText,
-  ChevronDown,
-  ChevronUp,
   GripVertical,
   Download,
   Share2,
@@ -37,6 +35,7 @@ import { zhTW } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -855,6 +854,166 @@ export default function TripDetail() {
   );
 }
 
+// Activity Detail Sheet
+function ActivityDetailSheet({
+  activity,
+  currency,
+  open,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  activity: Activity | null;
+  currency?: string;
+  open: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  if (!activity) return null;
+  const config = categoryConfig[activity.category];
+  const Icon = config.icon;
+
+  const googleMapsUrl = activity.lat != null && activity.lng != null
+    ? `https://www.google.com/maps/dir/?api=1&destination=${activity.lat},${activity.lng}&travelmode=driving`
+    : activity.address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activity.address)}`
+    : null;
+
+  const durationLabel = activity.duration
+    ? activity.duration >= 60
+      ? `${Math.floor(activity.duration / 60)} 小時${activity.duration % 60 > 0 ? ` ${activity.duration % 60} 分鐘` : ""}`
+      : `${activity.duration} 分鐘`
+    : null;
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0 bg-white">
+        {/* Category color strip */}
+        <div className={`h-1.5 w-full rounded-t-2xl ${config.dot}`} />
+
+        <div className="p-5">
+          {/* Header */}
+          <SheetHeader className="mb-4 text-left">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <SheetTitle className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)] leading-tight">
+                    {activity.title}
+                  </SheetTitle>
+                  <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${config.color}`}>
+                    {config.label}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => { onClose(); onEdit(); }}
+                  className="w-8 h-8 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.55_0.05_220)] transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => { onClose(); onDelete(); }}
+                  className="w-8 h-8 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </SheetHeader>
+
+          {/* Info rows */}
+          <div className="space-y-3">
+            {/* Time & Duration */}
+            {(activity.time || durationLabel) && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
+                <Clock className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">時間 / 停留時間</p>
+                  <p className="text-sm font-medium text-[oklch(0.22_0.08_220)] font-['DM_Mono']">
+                    {activity.time || "—"}
+                    {durationLabel && (
+                      <span className="font-['DM_Sans'] text-[oklch(0.55_0.05_220)] font-normal ml-2">（{durationLabel}）</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Address with Google Maps link */}
+            {(activity.address || activity.location) && (
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
+                <MapPin className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">地址</p>
+                  {activity.location && (
+                    <p className="text-sm font-semibold text-[oklch(0.22_0.08_220)] mb-0.5">{activity.location}</p>
+                  )}
+                  {activity.address && (
+                    <p className="text-sm text-[oklch(0.45_0.05_220)] break-words">{activity.address}</p>
+                  )}
+                  {googleMapsUrl && (
+                    <a
+                      href={googleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-[oklch(0.62_0.12_220)] text-white text-xs font-medium hover:bg-[oklch(0.55_0.12_220)] transition-colors active:scale-[0.97]"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      在 Google Maps 導航
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Cost */}
+            {activity.cost != null && activity.cost > 0 && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
+                <DollarSign className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">費用</p>
+                  <p className="text-sm font-bold text-[oklch(0.22_0.08_220)] font-['DM_Mono']">
+                    {activity.cost.toLocaleString()} {currency || "TWD"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {activity.notes && (
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
+                <FileText className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">行程說明 / 備註</p>
+                  <p className="text-sm text-[oklch(0.35_0.05_220)] leading-relaxed whitespace-pre-wrap">{activity.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Map preview */}
+            {activity.lat != null && activity.lng != null && (
+              <div className="rounded-xl overflow-hidden border border-[oklch(0.92_0.008_220)]">
+                <MapPreview
+                  lat={activity.lat}
+                  lng={activity.lng}
+                  title={activity.location ?? undefined}
+                  address={activity.address ?? undefined}
+                  compact
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // Activity Card Component
 function ActivityCard({
   activity,
@@ -875,11 +1034,12 @@ function ActivityCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const config = categoryConfig[activity.category];
   const Icon = config.icon;
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
@@ -894,11 +1054,17 @@ function ActivityCard({
       </div>
 
       {/* Card */}
-      <div className="flex-1 bg-white rounded-xl border border-[oklch(0.92_0.008_220)] overflow-hidden hover:shadow-md transition-shadow duration-200 mb-2">
+      <div
+        className="flex-1 bg-white rounded-xl border border-[oklch(0.92_0.008_220)] overflow-hidden hover:shadow-md transition-shadow duration-200 mb-2 cursor-pointer active:scale-[0.99]"
+        onClick={() => setShowDetail(true)}
+      >
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2 flex-1 min-w-0">
-              <div className="mt-1 cursor-grab active:cursor-grabbing text-[oklch(0.65_0.05_220)] hover:text-[oklch(0.55_0.05_220)] transition-colors flex-shrink-0">
+              <div
+                className="mt-1 cursor-grab active:cursor-grabbing text-[oklch(0.65_0.05_220)] hover:text-[oklch(0.55_0.05_220)] transition-colors flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <GripVertical className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
@@ -941,15 +1107,7 @@ function ActivityCard({
             </div>
             </div>
 
-            <div className="flex items-center gap-1">
-              {(activity.notes || activity.address || (activity as any).lat) && (
-                <button
-                  onClick={() => setExpanded(!expanded)}
-                  className="w-7 h-7 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.65_0.05_220)] transition-colors"
-                >
-                  {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              )}
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="w-7 h-7 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.65_0.05_220)] transition-colors">
@@ -969,46 +1127,20 @@ function ActivityCard({
               </DropdownMenu>
             </div>
           </div>
-
-          {/* Expandable details */}
-          <AnimatePresence>
-            {expanded && (activity.notes || activity.address || (activity as any).lat) && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 pt-3 border-t border-[oklch(0.94_0.008_220)] space-y-3">
-                  {activity.lat != null && activity.lng != null && (
-                    <MapPreview
-                      lat={activity.lat}
-                      lng={activity.lng}
-                      title={activity.location ?? undefined}
-                      address={activity.address ?? undefined}
-                      compact
-                    />
-                  )}
-                  {activity.address && !(activity as any).lat && (
-                    <div className="flex items-start gap-2 text-xs text-[oklch(0.55_0.05_220)]">
-                      <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                      <span>{activity.address}</span>
-                    </div>
-                  )}
-                  {activity.notes && (
-                    <div className="flex items-start gap-2 text-xs text-[oklch(0.55_0.05_220)]">
-                      <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                      <span>{activity.notes}</span>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </div>
     </motion.div>
+
+    {/* Activity Detail Sheet */}
+    <ActivityDetailSheet
+      activity={activity}
+      currency={currency}
+      open={showDetail}
+      onClose={() => setShowDetail(false)}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+    </>
   );
 }
 
