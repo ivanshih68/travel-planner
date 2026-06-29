@@ -23,9 +23,10 @@ import {
   Calendar,
   DollarSign,
   FileText,
-  GripVertical,
   Download,
   Share2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
@@ -91,23 +92,29 @@ const defaultActivityForm: ActivityForm = {
   images: [],
 };
 
-// ActivityCard Component defined inside or imported
+// ActivityCard Component
 function ActivityCard({ 
   activity, 
   index, 
+  isFirst,
+  isLast,
   currency, 
   hasConflict, 
   onEdit, 
-  onDelete 
+  onDelete,
+  onMoveUp,
+  onMoveDown
 }: { 
   activity: Activity; 
   index: number; 
+  isFirst: boolean;
+  isLast: boolean;
   currency?: string; 
   hasConflict?: boolean; 
   onEdit: () => void; 
   onDelete: () => void; 
-  isDragging?: boolean;
-  isDragOver?: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }) {
   const config = categoryConfig[activity.category] || categoryConfig.OTHER;
   const Icon = config.icon;
@@ -123,68 +130,90 @@ function ActivityCard({
       </div>
 
       {/* Content card */}
-      <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow">
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
-              {config.label}
-            </span>
-            {hasConflict && (
-              <div className="flex items-center gap-1 text-[oklch(0.65_0.18_35)] bg-orange-50 px-2 py-0.5 rounded-full">
-                <AlertTriangle className="w-3 h-3" />
-                <span className="text-[10px] font-bold">時間衝突</span>
-              </div>
-            )}
-          </div>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit} className="gap-2">
-                <Edit3 className="w-4 h-4" /> 編輯
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDelete} className="text-red-600 gap-2">
-                <Trash2 className="w-4 h-4" /> 刪除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <h3 className="text-base font-bold text-[oklch(0.22_0.08_220)] mb-1">{activity.title}</h3>
-        
-        <div className="space-y-1.5">
-          {activity.location && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <MapPin className="w-3.5 h-3.5" />
-              <span className="truncate">{activity.location}</span>
+      <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4">
+        <div className="flex-1">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+                {config.label}
+              </span>
+              {hasConflict && (
+                <div className="flex items-center gap-1 text-[oklch(0.65_0.18_35)] bg-orange-50 px-2 py-0.5 rounded-full">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span className="text-[10px] font-bold">時間衝突</span>
+                </div>
+              )}
             </div>
-          )}
-          
-          <div className="flex flex-wrap gap-3">
-            {activity.duration && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <Clock className="w-3.5 h-3.5" />
-                <span>{activity.duration} 分鐘</span>
-              </div>
-            )}
-            {activity.cost && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <DollarSign className="w-3.5 h-3.5" />
-                <span>{activity.cost.toLocaleString()} {currency}</span>
-              </div>
-            )}
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onEdit} className="gap-2">
+                  <Edit3 className="w-4 h-4" /> 編輯
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onDelete} className="text-red-600 gap-2">
+                  <Trash2 className="w-4 h-4" /> 刪除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+
+          <h3 className="text-base font-bold text-[oklch(0.22_0.08_220)] mb-1">{activity.title}</h3>
+          
+          <div className="space-y-1.5">
+            {activity.location && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <MapPin className="w-3.5 h-3.5" />
+                <span className="truncate">{activity.location}</span>
+              </div>
+            )}
+            
+            <div className="flex flex-wrap gap-3">
+              {activity.duration && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{activity.duration} 分鐘</span>
+                </div>
+              )}
+              {activity.cost && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <DollarSign className="w-3.5 h-3.5" />
+                  <span>{activity.cost.toLocaleString()} {currency}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {activity.notes && (
+            <p className="mt-3 text-xs text-gray-400 line-clamp-2 italic">
+              "{activity.notes}"
+            </p>
+          )}
         </div>
 
-        {activity.notes && (
-          <p className="mt-3 text-xs text-gray-400 line-clamp-2 italic">
-            "{activity.notes}"
-          </p>
-        )}
+        {/* Reorder arrows */}
+        <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)]">
+          <button 
+            onClick={onMoveUp}
+            disabled={isFirst}
+            className={`p-1.5 rounded-lg transition-colors ${isFirst ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-100 hover:text-[oklch(0.22_0.08_220)]'}`}
+            title="上移"
+          >
+            <ChevronUp className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={onMoveDown}
+            disabled={isLast}
+            className={`p-1.5 rounded-lg transition-colors ${isLast ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-100 hover:text-[oklch(0.22_0.08_220)]'}`}
+            title="下移"
+          >
+            <ChevronDown className="w-5 h-5" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -216,7 +245,7 @@ export default function TripDetail() {
   const tripId = params.id;
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const { activities, activitiesByDay, loading, createActivity, updateActivity, deleteActivity } = useActivities(tripId);
+  const { activities, activitiesByDay, loading, createActivity, updateActivity, deleteActivity, reorderActivities } = useActivities(tripId);
   const isMobile = useIsMobile();
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -272,13 +301,40 @@ export default function TripDetail() {
     [activitiesByDay, selectedDay]
   );
 
-  // Sorting: We'll just use the items as they are from the API
+  // Sorting
   const sortedItems = useMemo(() => {
     return [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [currentDayActivities]);
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
+
+  // Move Activity Up/Down
+  const handleMoveActivity = async (index: number, direction: 'up' | 'down') => {
+    if (!tripId) return;
+    const newItems = [...sortedItems];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (targetIndex < 0 || targetIndex >= newItems.length) return;
+
+    // Swap items
+    const temp = newItems[index];
+    newItems[index] = newItems[targetIndex];
+    newItems[targetIndex] = temp;
+
+    // Prepare orders for API
+    const orders = newItems.map((item, idx) => ({
+      id: item.id!,
+      sortOrder: idx
+    }));
+
+    try {
+      await reorderActivities(orders);
+      toast.success("順序已更新");
+    } catch {
+      toast.error("更新順序失敗");
+    }
+  };
 
   // ── Time conflict detection ──────────────────────────────────────────────
   const conflictingIds = useMemo(() => {
@@ -694,10 +750,14 @@ export default function TripDetail() {
                       <ActivityCard
                         activity={item}
                         index={index}
+                        isFirst={index === 0}
+                        isLast={index === sortedItems.length - 1}
                         currency={trip?.currency}
                         hasConflict={conflictingIds.has(item.id!)}
                         onEdit={() => openEditActivity(item)}
                         onDelete={() => setDeletingActivity(item)}
+                        onMoveUp={() => handleMoveActivity(index, 'up')}
+                        onMoveDown={() => handleMoveActivity(index, 'down')}
                       />
                     </div>
                   ))}
