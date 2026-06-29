@@ -33,27 +33,6 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   res.json({ trips });
 });
 
-// ── POST /api/trips ──────────────────────────────────────
-router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
-  const parsed = tripSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0].message });
-    return;
-  }
-
-  const { startDate, endDate, budget, ...rest } = parsed.data;
-  const trip = await prisma.trip.create({
-    data: {
-      ...rest,
-      userId: req.userId!,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      budget: budget ?? null,
-    },
-  });
-  res.status(201).json({ trip });
-});
-
 // ── IMPORTANT: 所有靜態路由必須放在 /:id 之前 ──────────────
 
 // ── GET /api/trips/shared-with-me ────────────────────────
@@ -81,7 +60,7 @@ router.get("/shared-with-me", requireAuth, async (req: AuthRequest, res: Respons
     orderBy: { createdAt: "desc" },
   });
 
-  const trips = shares.map((s: typeof shares[number]) => ({ ...s.trip, sharedAt: s.createdAt, sharedBy: s.trip.user }));
+  const trips = shares.map((s: any) => ({ ...s.trip, sharedAt: s.createdAt, sharedBy: s.trip.user }));
   res.json({ trips });
 });
 
@@ -101,16 +80,52 @@ router.get("/shared/:token", async (req, res: Response) => {
 
 // ── GET /api/trips/:id ───────────────────────────────────
 router.get("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) {
+    res.status(401).json({ error: "未授權" });
+    return;
+  }
+
+  const userEmail = user.email.toLowerCase();
+
+  // 檢查行程是否存在，且使用者是擁有者或是被分享者
   const trip = await prisma.trip.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: {
+      id: req.params.id,
+      OR: [
+        { userId: req.userId },
+        { shares: { some: { sharedWith: userEmail } } }
+      ]
+    },
     include: { activities: { orderBy: [{ day: "asc" }, { sortOrder: "asc" }] } },
   });
 
   if (!trip) {
-    res.status(404).json({ error: "行程不存在" });
+    res.status(404).json({ error: "行程不存在或您沒有權限查看" });
     return;
   }
   res.json({ trip });
+});
+
+// ── POST /api/trips ──────────────────────────────────────
+router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
+  const parsed = tripSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0].message });
+    return;
+  }
+
+  const { startDate, endDate, budget, ...rest } = parsed.data;
+  const trip = await prisma.trip.create({
+    data: {
+      ...rest,
+      userId: req.userId!,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      budget: budget ?? null,
+    },
+  });
+  res.status(201).json({ trip });
 });
 
 // ── PATCH /api/trips/:id ─────────────────────────────────
