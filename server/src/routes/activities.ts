@@ -23,18 +23,32 @@ const activitySchema = z.object({
   sortOrder: z.number().int().default(0),
 });
 
-// 確認行程屬於當前使用者的 helper
-async function verifyTripOwnership(tripId: string, userId: string): Promise<boolean> {
-  const trip = await prisma.trip.findFirst({ where: { id: tripId, userId } });
-  return !!trip;
+/**
+ * 檢查行程訪問權限
+ * @returns 'owner' | 'shared' | null
+ */
+async function checkTripAccess(tripId: string, userId: string): Promise<'owner' | 'shared' | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return null;
+
+  const trip = await prisma.trip.findUnique({
+    where: { id: tripId },
+    include: { shares: { where: { sharedWith: user.email.toLowerCase() } } }
+  });
+
+  if (!trip) return null;
+  if (trip.userId === userId) return 'owner';
+  if (trip.shares.length > 0) return 'shared';
+  return null;
 }
 
 // ── GET /api/trips/:tripId/activities ────────────────────
 router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   const { tripId } = req.params;
-  const owned = await verifyTripOwnership(tripId as string, req.userId!);
-  if (!owned) {
-    res.status(404).json({ error: "行程不存在" });
+  const access = await checkTripAccess(tripId as string, req.userId!);
+  
+  if (!access) {
+    res.status(404).json({ error: "行程不存在或您沒有權限查看" });
     return;
   }
 
@@ -48,9 +62,11 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
 // ── POST /api/trips/:tripId/activities ───────────────────
 router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   const { tripId } = req.params;
-  const owned = await verifyTripOwnership(tripId as string, req.userId!);
-  if (!owned) {
-    res.status(404).json({ error: "行程不存在" });
+  const access = await checkTripAccess(tripId as string, req.userId!);
+  
+  // 僅擁有者可以新增活動
+  if (access !== 'owner') {
+    res.status(403).json({ error: "僅行程擁有者可以新增活動" });
     return;
   }
 
@@ -76,14 +92,19 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 
 // ── PATCH /api/activities/:id ────────────────────────────
 router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
-  // 確認活動屬於使用者的行程
   const activity = await prisma.activity.findFirst({
     where: { id: req.params.id },
-    include: { trip: { select: { userId: true } } },
+    include: { trip: { select: { id: true, userId: true } } },
   });
 
-  if (!activity || activity.trip.userId !== req.userId) {
+  if (!activity) {
     res.status(404).json({ error: "活動不存在" });
+    return;
+  }
+
+  // 僅擁有者可以修改活動
+  if (activity.trip.userId !== req.userId) {
+    res.status(403).json({ error: "僅行程擁有者可以修改活動" });
     return;
   }
 
@@ -114,8 +135,14 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     include: { trip: { select: { userId: true } } },
   });
 
-  if (!activity || activity.trip.userId !== req.userId) {
+  if (!activity) {
     res.status(404).json({ error: "活動不存在" });
+    return;
+  }
+
+  // 僅擁有者可以刪除活動
+  if (activity.trip.userId !== req.userId) {
+    res.status(403).json({ error: "僅行程擁有者可以刪除活動" });
     return;
   }
 
@@ -126,9 +153,11 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
 // ── PATCH /api/trips/:tripId/activities/reorder ──────────
 router.patch("/reorder", requireAuth, async (req: AuthRequest, res: Response) => {
   const { tripId } = req.params;
-  const owned = await verifyTripOwnership(tripId as string, req.userId!);
-  if (!owned) {
-    res.status(404).json({ error: "行程不存在" });
+  const access = await checkTripAccess(tripId as string, req.userId!);
+  
+  // 僅擁有者可以重新排序
+  if (access !== 'owner') {
+    res.status(403).json({ error: "僅行程擁有者可以修改排序" });
     return;
   }
 
