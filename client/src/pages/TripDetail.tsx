@@ -1043,7 +1043,7 @@ export default function TripDetail() {
               <Label>活動照片</Label>
               <CloudinaryImageUpload 
                 images={form.images}
-                onImagesChange={(images) => setForm(prev => ({ ...prev, images }))}
+                onChange={(images) => setForm(prev => ({ ...prev, images }))}
                 maxImages={5}
               />
             </div>
