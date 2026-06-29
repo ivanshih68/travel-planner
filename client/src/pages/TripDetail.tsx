@@ -47,8 +47,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/contexts/AuthContext";
 import { CloudinaryImageUpload } from "@/components/CloudinaryImageUpload";
 import { useActivities } from "@/hooks/useActivities";
-import { useDragSort } from "@/hooks/useDragSort";
-import { useTouchDragSort } from "@/hooks/useTouchDragSort";
 import { useIsMobile } from "@/hooks/useMobile";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
@@ -92,6 +90,126 @@ const defaultActivityForm: ActivityForm = {
   lng: undefined,
   images: [],
 };
+
+// ActivityCard Component defined inside or imported
+function ActivityCard({ 
+  activity, 
+  index, 
+  currency, 
+  hasConflict, 
+  onEdit, 
+  onDelete 
+}: { 
+  activity: Activity; 
+  index: number; 
+  currency?: string; 
+  hasConflict?: boolean; 
+  onEdit: () => void; 
+  onDelete: () => void; 
+  isDragging?: boolean;
+  isDragOver?: boolean;
+}) {
+  const config = categoryConfig[activity.category] || categoryConfig.OTHER;
+  const Icon = config.icon;
+
+  return (
+    <div className="group relative flex gap-4 items-start">
+      {/* Time column */}
+      <div className="w-12 pt-1 flex flex-col items-center">
+        <span className="text-xs font-bold text-[oklch(0.45_0.05_220)]">
+          {activity.time || "--:--"}
+        </span>
+        <div className={`mt-2 w-2.5 h-2.5 rounded-full border-2 border-white ring-2 ring-offset-1 ${config.dot}`} />
+      </div>
+
+      {/* Content card */}
+      <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow">
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+              {config.label}
+            </span>
+            {hasConflict && (
+              <div className="flex items-center gap-1 text-[oklch(0.65_0.18_35)] bg-orange-50 px-2 py-0.5 rounded-full">
+                <AlertTriangle className="w-3 h-3" />
+                <span className="text-[10px] font-bold">時間衝突</span>
+              </div>
+            )}
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onEdit} className="gap-2">
+                <Edit3 className="w-4 h-4" /> 編輯
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="text-red-600 gap-2">
+                <Trash2 className="w-4 h-4" /> 刪除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <h3 className="text-base font-bold text-[oklch(0.22_0.08_220)] mb-1">{activity.title}</h3>
+        
+        <div className="space-y-1.5">
+          {activity.location && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <MapPin className="w-3.5 h-3.5" />
+              <span className="truncate">{activity.location}</span>
+            </div>
+          )}
+          
+          <div className="flex flex-wrap gap-3">
+            {activity.duration && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{activity.duration} 分鐘</span>
+              </div>
+            )}
+            {activity.cost && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <DollarSign className="w-3.5 h-3.5" />
+                <span>{activity.cost.toLocaleString()} {currency}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {activity.notes && (
+          <p className="mt-3 text-xs text-gray-400 line-clamp-2 italic">
+            "{activity.notes}"
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DayEmptyState({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-[oklch(0.9_0.02_220)] rounded-3xl bg-[oklch(0.98_0.005_220)]">
+      <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+        <Calendar className="w-8 h-8 text-[oklch(0.8_0.05_220)]" />
+      </div>
+      <h3 className="text-lg font-bold text-[oklch(0.35_0.06_220)] mb-2">這天還沒有安排</h3>
+      <p className="text-sm text-gray-400 text-center max-w-[240px] mb-6">
+        新增景點、餐廳或住宿，開始規劃這天的行程
+      </p>
+      <Button 
+        onClick={onAdd}
+        variant="outline"
+        className="rounded-full border-[oklch(0.8_0.05_220)] text-[oklch(0.35_0.06_220)] hover:bg-[oklch(0.62_0.12_220)] hover:text-white transition-all"
+      >
+        <Plus className="w-4 h-4 mr-2" /> 新增第一個活動
+      </Button>
+    </div>
+  );
+}
 
 export default function TripDetail() {
   const params = useParams<{ id: string }>();
@@ -154,62 +272,15 @@ export default function TripDetail() {
     [activitiesByDay, selectedDay]
   );
 
-  // Drag and drop sorting - memoize to prevent infinite update loop
-  const dragSortItems = useMemo(() => {
-    const activitiesForDay = activitiesByDay[selectedDay] || [];
-    return activitiesForDay.map((activity) => ({
-      id: activity.id || "",
-      data: activity,
-      order: activity.sortOrder ?? 0,
-    }));
-  }, [activitiesByDay, selectedDay]);
-
-  // Stable reorder callback — useCallback so the reference never changes
-  const handleReorder = useCallback(async (reorderedItems: { id: string; order: number }[]) => {
-    try {
-      await Promise.all(
-        reorderedItems.map((item) =>
-          updateActivity(item.id, { sortOrder: item.order })
-        )
-      );
-      toast.success("活動順序已更新");
-    } catch (error) {
-      toast.error("更新順序失敗");
-      throw error;
-    }
-  }, [updateActivity]);
-
-  const handleReorderError = useCallback((error: Error) => {
-    console.error("Drag sort error:", error);
-    toast.error("排序失敗，請稍後再試");
-  }, []);
-
-  // Use appropriate drag sort hook based on device
-  const touchDragResult = useTouchDragSort({
-    items: dragSortItems,
-    onReorder: handleReorder,
-    onError: handleReorderError,
-  });
-
-  const desktopDragResult = useDragSort({
-    items: dragSortItems,
-    onReorder: handleReorder,
-    onError: handleReorderError,
-  });
-
-  // Select appropriate result based on device
-  const dragResult = isMobile ? touchDragResult : desktopDragResult;
-  const { sortedItems, draggingId, dragOverId, isReordering } = dragResult;
-  
-  // Get handlers from the appropriate drag result
-  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = isMobile ? touchDragResult : { handlePointerDown: undefined, handlePointerMove: undefined, handlePointerUp: undefined, handlePointerLeave: undefined };
-  const { handleDragStart, handleDragOver, handleDragLeave: handleDesktopDragLeave, handleDrop, handleDragEnd } = !isMobile ? desktopDragResult : { handleDragStart: undefined, handleDragOver: undefined, handleDragLeave: undefined, handleDrop: undefined, handleDragEnd: undefined };
+  // Sorting: We'll just use the items as they are from the API
+  const sortedItems = useMemo(() => {
+    return [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [currentDayActivities]);
 
   const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
 
   // ── Time conflict detection ──────────────────────────────────────────────
-  // Returns a Set of activity IDs that overlap with at least one other activity
   const conflictingIds = useMemo(() => {
     const withTime = currentDayActivities.filter((a) => a.time && a.duration);
     const conflicted = new Set<string>();
@@ -336,7 +407,6 @@ export default function TripDetail() {
   // ── Share trip ──────────────────────────────────────────────────────────
   const handleShareTrip = async () => {
     if (!tripId) return;
-    // Open share dialog and load existing shares
     setShowShareDialog(true);
     setShareEmail("");
     setSharesLoading(true);
@@ -357,7 +427,6 @@ export default function TripDetail() {
       await tripSharingApi.shareWith(tripId, shareEmail.trim());
       toast.success(`已分享給 ${shareEmail}`);
       setShareEmail("");
-      // Refresh shares list
       const { data } = await tripSharingApi.getShares(tripId);
       setExistingShares(data.shares);
     } catch (err: any) {
@@ -405,318 +474,237 @@ export default function TripDetail() {
 
   if (!trip) {
     return (
-      <div className="min-h-screen bg-[oklch(0.97_0.015_80)] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-[oklch(0.52_0.05_220)] mb-4">找不到此行程</p>
-          <Button onClick={() => setLocation("/dashboard")}>返回行程列表</Button>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[oklch(0.97_0.015_80)]">
+        <div className="bg-white p-8 rounded-3xl shadow-sm text-center max-w-md">
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-[oklch(0.22_0.08_220)] mb-2">找不到此行程</h2>
+          <p className="text-gray-500 mb-6">此行程可能已被刪除，或您沒有權限查看。</p>
+          <Button onClick={() => setLocation("/dashboard")} className="rounded-full w-full">
+            回到儀表板
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[oklch(0.97_0.015_80)] flex flex-col">
-      {/* ===== Header ===== */}
-      <header className="bg-[oklch(0.22_0.08_220)] text-white sticky top-0 z-20">
-        <div className="px-4 lg:px-8 py-4 flex items-center gap-4">
-          <button
+    <div className="min-h-screen bg-[oklch(0.97_0.015_80)] lg:flex">
+      {/* ===== Desktop Sidebar ===== */}
+      <aside className="hidden lg:flex w-80 flex-col bg-white border-r border-[oklch(0.92_0.01_220)] h-screen sticky top-0">
+        <div className="p-6 border-b border-[oklch(0.95_0.005_220)]">
+          <button 
             onClick={() => setLocation("/dashboard")}
-            className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors active:scale-[0.9]"
+            className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] hover:text-[oklch(0.22_0.08_220)] transition-colors mb-6 group"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-sm font-bold">返回儀表板</span>
           </button>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <img src={LOGO_URL} alt="Voyager" className="w-6 h-6 brightness-0 invert hidden sm:block" />
-            <div className="min-w-0">
-              <h1 className="font-['Playfair_Display'] text-lg font-bold truncate">{trip.title}</h1>
-              <div className="flex items-center gap-2 text-white/60 text-xs">
-                <MapPin className="w-3 h-3" />
-                <span>{trip.destination}</span>
-                <span>·</span>
-                <span className="font-['DM_Mono']">{days.length} 天</span>
-              </div>
-            </div>
+          
+          <div className="flex items-center gap-3 mb-1">
+            <img src={LOGO_URL} alt="Logo" className="w-6 h-6" />
+            <h1 className="text-2xl font-['Playfair_Display'] font-black text-[oklch(0.22_0.08_220)] truncate">
+              {trip.title}
+            </h1>
           </div>
-
-          {/* Header action buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleShareTrip}
-              disabled={isSharing}
-              title="分享行程"
-              className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors active:scale-[0.9] disabled:opacity-50"
-            >
-              {isSharing ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Share2 className="w-4 h-4" />
-              )}
-            </button>
-            <button
-              onClick={handleExportPdf}
-              disabled={isExporting}
-              title="匯出 PDF"
-              className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors active:scale-[0.9] disabled:opacity-50"
-            >
-              {isExporting ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-
-          {/* Trip stats */}
-          <div className="hidden sm:flex items-center gap-4 text-sm">
-            <div className="text-right">
-              <p className="text-white/50 text-xs">活動數</p>
-              <p className="font-['DM_Mono'] font-bold">{activities.length}</p>
-            </div>
-            {trip.budget && (
-              <div className="text-right">
-                <p className="text-white/50 text-xs">總預算</p>
-                <p className="font-['DM_Mono'] font-bold">{trip.budget.toLocaleString()} {trip.currency}</p>
-              </div>
-            )}
+          <div className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] text-sm">
+            <MapPin className="w-3.5 h-3.5" />
+            <span>{trip.destination}</span>
+            <span className="mx-1">•</span>
+            <span>{days.length} 天</span>
           </div>
         </div>
 
-        {/* Day tabs — horizontal scroll */}
-        <div className="flex gap-1 px-4 lg:px-8 pb-3 overflow-x-auto scrollbar-hide">
-          {days.map((day) => {
-            const dayActivities = activitiesByDay[day.day] || [];
-            return (
-              <button
-                key={day.day}
-                onClick={() => setSelectedDay(day.day)}
-                className={`flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl transition-all duration-150 min-w-[60px] ${
-                  selectedDay === day.day
-                    ? "bg-[oklch(0.62_0.12_220)] text-white"
-                    : "hover:bg-white/10 text-white/60"
-                }`}
-              >
-                <span className="text-xs font-['DM_Mono'] font-bold">{day.label}</span>
-                <span className="text-xs mt-0.5">{day.dateStr}</span>
-                {dayActivities.length > 0 && (
-                  <div className="w-1 h-1 rounded-full bg-[oklch(0.72_0.14_35)] mt-1" />
-                )}
-              </button>
-            );
-          })}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+          {days.map((d) => (
+            <button
+              key={d.day}
+              onClick={() => setSelectedDay(d.day)}
+              className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${
+                selectedDay === d.day
+                  ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-[1.02]"
+                  : "hover:bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"
+              }`}
+            >
+              <div className="text-left">
+                <div className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>
+                  {d.label}
+                </div>
+                <div className="font-bold">{d.dateStr} {d.weekday}</div>
+              </div>
+              <div className={`text-xs font-bold px-2 py-1 rounded-lg ${selectedDay === d.day ? "bg-white/20" : "bg-gray-100"}`}>
+                {activitiesByDay[d.day]?.length || 0}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6 bg-[oklch(0.98_0.005_220)] border-t border-[oklch(0.95_0.005_220)]">
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-sm font-bold text-[oklch(0.45_0.05_220)]">預算概況</span>
+            <span className="text-xs font-bold text-[oklch(0.45_0.05_220)]">
+              {totalCost.toLocaleString()} / {trip.budget?.toLocaleString() || 0} {trip.currency}
+            </span>
+          </div>
+          <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mb-6">
+            <div 
+              className="h-full bg-[oklch(0.62_0.12_220)] transition-all duration-500"
+              style={{ width: `${Math.min(100, (totalCost / (trip.budget || 1)) * 100)}%` }}
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              onClick={handleExportPdf}
+              disabled={isExporting}
+              variant="outline" 
+              className="rounded-xl h-10 border-[oklch(0.9_0.02_220)] text-[oklch(0.35_0.06_220)] hover:bg-gray-50"
+            >
+              <Download className="w-4 h-4 mr-2" /> 匯出
+            </Button>
+            <Button 
+              onClick={handleShareTrip}
+              variant="outline" 
+              className="rounded-xl h-10 border-[oklch(0.9_0.02_220)] text-[oklch(0.35_0.06_220)] hover:bg-gray-50"
+            >
+              <Share2 className="w-4 h-4 mr-2" /> 分享
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ===== Mobile Header ===== */}
+      <header className="lg:hidden bg-white border-b border-[oklch(0.92_0.01_220)] sticky top-0 z-20">
+        <div className="p-4 flex items-center justify-between">
+          <button onClick={() => setLocation("/dashboard")} className="p-2 -ml-2">
+            <ArrowLeft className="w-5 h-5 text-[oklch(0.22_0.08_220)]" />
+          </button>
+          <div className="text-center flex-1 px-4">
+            <h1 className="text-lg font-black text-[oklch(0.22_0.08_220)] truncate">{trip.title}</h1>
+            <p className="text-[10px] font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest">
+              {trip.destination} • {days.length} 天
+            </p>
+          </div>
+          <div className="flex gap-1">
+            <button onClick={handleShareTrip} className="p-2">
+              <Share2 className="w-5 h-5 text-[oklch(0.22_0.08_220)]" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex overflow-x-auto px-4 pb-3 no-scrollbar gap-2">
+          {days.map((d) => (
+            <button
+              key={d.day}
+              onClick={() => setSelectedDay(d.day)}
+              className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${
+                selectedDay === d.day
+                  ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-105"
+                  : "bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"
+              }`}
+            >
+              <span className={`text-[10px] font-bold uppercase mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>
+                Day {d.day}
+              </span>
+              <span className="text-sm font-bold">{d.dateStr}</span>
+            </button>
+          ))}
         </div>
       </header>
 
       {/* ===== Main Content ===== */}
-      <div className="flex-1 flex">
-        {/* Desktop: Day info sidebar */}
-        <aside className="hidden lg:block w-72 bg-white border-r border-[oklch(0.92_0.008_220)] p-6">
-          {days[selectedDay - 1] && (
-            <div>
-              <div className="mb-6">
-                <p className="text-xs text-[oklch(0.55_0.05_220)] font-['DM_Mono'] uppercase tracking-widest mb-1">
-                  Day {selectedDay}
-                </p>
-                <h2 className="font-['Playfair_Display'] text-2xl font-bold text-[oklch(0.22_0.08_220)]">
-                  {format(days[selectedDay - 1].date, "M月d日", { locale: zhTW })}
-                </h2>
-                <p className="text-[oklch(0.55_0.05_220)] text-sm">
-                  {format(days[selectedDay - 1].date, "EEEE", { locale: zhTW })}
-                </p>
-              </div>
-
-              {/* Day stats */}
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center justify-between py-2 border-b border-[oklch(0.94_0.008_220)]">
-                  <span className="text-sm text-[oklch(0.55_0.05_220)]">活動數量</span>
-                  <span className="font-['DM_Mono'] font-bold text-[oklch(0.22_0.08_220)]">
-                    {currentDayActivities.length}
-                  </span>
-                </div>
-                {dayTotalCost > 0 && (
-                  <div className="flex items-center justify-between py-2 border-b border-[oklch(0.94_0.008_220)]">
-                    <span className="text-sm text-[oklch(0.55_0.05_220)]">當日費用</span>
-                    <span className="font-['DM_Mono'] font-bold text-[oklch(0.22_0.08_220)]">
-                      {dayTotalCost.toLocaleString()} {trip.currency || "TWD"}
-                    </span>
-                  </div>
-                )}
-                {totalCost > 0 && (
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-[oklch(0.55_0.05_220)]">總計費用</span>
-                    <span className="font-['DM_Mono'] font-bold text-[oklch(0.62_0.12_220)]">
-                      {totalCost.toLocaleString()} {trip.currency || "TWD"}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Category breakdown */}
-              <div>
-                <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest mb-3 font-['DM_Mono']">
-                  活動分類
-                </p>
-                <div className="space-y-2">
-                  {Object.entries(categoryConfig).map(([key, config]) => {
-                    const count = currentDayActivities.filter((a) => a.category === key).length;
-                    if (count === 0) return null;
-                    const Icon = config.icon;
-                    return (
-                      <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${config.color}`}>
-                        <Icon className="w-3.5 h-3.5" />
-                        <span className="text-xs font-medium">{config.label}</span>
-                        <span className="ml-auto text-xs font-['DM_Mono'] font-bold">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Cost pie chart */}
-              {costByCategory.length > 0 && (
-                <div className="mt-6">
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] uppercase tracking-widest mb-3 font-['DM_Mono']">
-                    費用分類
-                  </p>
-                  <div className="h-36">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={costByCategory}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={32}
-                          outerRadius={56}
-                          paddingAngle={3}
-                          dataKey="value"
-                        >
-                          {costByCategory.map((entry, i) => (
-                            <Cell key={i} fill={entry.color} stroke="transparent" />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value: number) => [
-                            `${value.toLocaleString()} ${trip?.currency || "TWD"}`,
-                            "",
-                          ]}
-                          contentStyle={{
-                            fontSize: 12,
-                            borderRadius: 8,
-                            border: "1px solid oklch(0.92 0.008 220)",
-                            padding: "6px 10px",
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="space-y-1.5 mt-2">
-                    {costByCategory.map((d) => (
-                      <div key={d.name} className="flex items-center gap-2 text-xs">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                        <span className="text-[oklch(0.45_0.05_220)] flex-1">{d.name}</span>
-                        <span className="font-['DM_Mono'] font-bold text-[oklch(0.22_0.08_220)]">
-                          {d.value.toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+      <div className="flex-1 flex flex-col lg:h-screen lg:overflow-hidden">
+        {/* Statistics Banner (Desktop Only) */}
+        <div className="hidden lg:grid grid-cols-3 gap-6 p-8 bg-[oklch(0.98_0.005_220)] border-b border-[oklch(0.95_0.005_220)]">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-[oklch(0.92_0.01_220)]">
+            <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">今日預算</div>
+            <div className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
+              {dayTotalCost.toLocaleString()} <span className="text-sm font-bold text-gray-400">{trip.currency}</span>
             </div>
-          )}
-        </aside>
-
-        {/* Activity timeline */}
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
-          {/* Day header (mobile) */}
-          <div className="lg:hidden mb-4">
-            {days[selectedDay - 1] && (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] font-['DM_Mono'] uppercase tracking-widest">
-                    Day {selectedDay}
-                  </p>
-                  <h2 className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)]">
-                    {format(days[selectedDay - 1].date, "M月d日 EEEE", { locale: zhTW })}
-                  </h2>
-                </div>
-                {currentDayActivities.length > 0 && dayTotalCost > 0 && (
-                  <div className="text-right">
-                    <p className="text-xs text-[oklch(0.55_0.05_220)]">當日費用</p>
-                    <p className="font-['DM_Mono'] font-bold text-[oklch(0.62_0.12_220)]">
-                      {dayTotalCost.toLocaleString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-
-          {/* Add activity button */}
-          <Button
-            onClick={openAddActivity}
-            className="w-full mb-6 h-11 border-2 border-dashed border-[oklch(0.82_0.06_220)] bg-transparent hover:bg-[oklch(0.62_0.12_220)]/5 text-[oklch(0.62_0.12_220)] hover:text-[oklch(0.55_0.12_220)] gap-2 transition-all duration-150"
-            variant="outline"
-          >
-            <Plus className="w-4 h-4" />
-            新增活動
-          </Button>
-
-          {/* Timeline */}
-          {loading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-24 rounded-xl" />
-              ))}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-[oklch(0.92_0.01_220)]">
+            <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">今日活動</div>
+            <div className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
+              {currentDayActivities.length} <span className="text-sm font-bold text-gray-400">個項目</span>
             </div>
-          ) : currentDayActivities.length === 0 ? (
-            <DayEmptyState onAdd={openAddActivity} />
-          ) : (
-            <AnimatePresence>
+          </div>
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-[oklch(0.92_0.01_220)] flex items-center justify-between">
+            <div>
+              <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">預算分佈</div>
+              <div className="text-xs text-gray-400 font-medium">依類別統計</div>
+            </div>
+            <div className="h-12 w-12">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={costByCategory.length > 0 ? costByCategory : [{ name: 'Empty', value: 1, color: '#f3f4f6' }]}
+                    innerRadius={15}
+                    outerRadius={24}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {(costByCategory.length > 0 ? costByCategory : [{ color: '#f3f4f6' }]).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline Content */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">
+                  {days[selectedDay - 1]?.label}
+                </div>
+                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)]">
+                  {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
+                  <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">
+                    {days[selectedDay - 1]?.weekday}
+                  </span>
+                </h2>
+              </div>
+              <Button 
+                onClick={openAddActivity}
+                className="hidden lg:flex rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"
+              >
+                <Plus className="w-4 h-4 mr-2" /> 新增活動
+              </Button>
+            </div>
+
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-3xl" />)}
+              </div>
+            ) : currentDayActivities.length === 0 ? (
+              <DayEmptyState onAdd={openAddActivity} />
+            ) : (
               <div className="relative">
                 {/* Timeline line */}
                 <div className="absolute left-[19px] top-6 bottom-6 w-0.5 bg-[oklch(0.88_0.008_220)]" />
 
                 <div className="space-y-3">
                   {sortedItems.map((item, index) => (
-                    <div
-                        key={item.id}
-                        draggable={!isMobile}
-                        onPointerDown={isMobile ? (e) => handlePointerDown?.(e, item) : undefined}
-                        onPointerMove={isMobile ? (e) => handlePointerMove?.(e, item) : undefined}
-                        onPointerUp={isMobile ? (e) => handlePointerUp?.(e) : undefined}
-                        onPointerLeave={isMobile ? handlePointerLeave : undefined}
-                        onDragStart={!isMobile ? (e) => {
-                          const el = (e.currentTarget as HTMLElement);
-                          handleDragStart?.(e as any, item, el);
-                        } : undefined}
-                        onDragOver={!isMobile ? (e) => handleDragOver?.(e as any, item) : undefined}
-                        onDragLeave={!isMobile ? handleDesktopDragLeave : undefined}
-                        onDrop={!isMobile ? (e) => handleDrop?.(e as any, item) : undefined}
-                        onDragEnd={!isMobile ? handleDragEnd : undefined}
-                        className={`transition-all duration-200 ${
-                          draggingId === item.id ? "opacity-50 scale-95" : ""
-                        } ${
-                          dragOverId === item.id
-                            ? "ring-2 ring-[oklch(0.62_0.12_220)] rounded-xl"
-                            : ""
-                        }`}
-                    >
+                    <div key={item.id}>
                       <ActivityCard
-                          activity={item.data}
-                          index={index}
-                          currency={trip?.currency}
-                          isDragging={draggingId === item.id}
-                          isDragOver={dragOverId === item.id}
-                          hasConflict={conflictingIds.has(item.id)}
-                          onEdit={() => openEditActivity(item.data)}
-                          onDelete={() => setDeletingActivity(item.data)}
+                        activity={item}
+                        index={index}
+                        currency={trip?.currency}
+                        hasConflict={conflictingIds.has(item.id!)}
+                        onEdit={() => openEditActivity(item)}
+                        onDelete={() => setDeletingActivity(item)}
                       />
                     </div>
                   ))}
                 </div>
               </div>
-            </AnimatePresence>
-          )}
+            )}
+          </div>
         </main>
       </div>
 
@@ -749,8 +737,8 @@ export default function TripDetail() {
                       onClick={() => setForm((prev) => ({ ...prev, category: key as Activity["category"] }))}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all duration-150 ${
                         form.category === key
-                          ? config.color + " font-medium"
-                          : "bg-[oklch(0.94_0.008_220)] text-[oklch(0.52_0.05_220)] hover:bg-[oklch(0.90_0.008_220)]"
+                          ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -762,144 +750,119 @@ export default function TripDetail() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱 *</Label>
+              <Label htmlFor="title">活動名稱 *</Label>
               <Input
-                placeholder="例：淺草寺參拜"
+                id="title"
                 value={form.title}
                 onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
+                placeholder="例如：東京鐵塔、築地市場..."
+                className="rounded-xl"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">時間</Label>
+                <Label htmlFor="time">開始時間</Label>
                 <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[oklch(0.65_0.06_220)]" />
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
+                    id="time"
                     type="time"
                     value={form.time}
                     onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
-                    className="pl-10 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
+                    className="pl-10 rounded-xl"
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">時長（分鐘）</Label>
+                <Label htmlFor="duration">預計時長 (分鐘)</Label>
                 <Input
+                  id="duration"
                   type="number"
-                  placeholder="60"
                   value={form.duration}
                   onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))}
-                  className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
+                  placeholder="60"
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label>
-              <PlaceSearch
-                value={form.location}
-                onSelect={(place) =>
-                  setForm((prev) => ({
+              <Label>地點搜尋</Label>
+              <PlaceSearch 
+                onPlaceSelect={(place) => {
+                  setForm(prev => ({
                     ...prev,
                     location: place.name,
-                    address: place.formattedAddress,
+                    address: place.address,
                     lat: place.lat,
-                    lng: place.lng,
-                  }))
-                }
-                placeholder="搜尋景點、餐廳..."
+                    lng: place.lng
+                  }));
+                }}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地址</Label>
-              <Input
-                placeholder="例：東京都台東區淺草2-3-1"
-                value={form.address}
-                onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-                className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
-              />
-            </div>
+            {(form.lat && form.lng) && (
+              <div className="h-40 rounded-xl overflow-hidden border border-gray-200">
+                <MapPreview lat={form.lat} lng={form.lng} title={form.location} />
+              </div>
+            )}
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">費用</Label>
+              <Label htmlFor="cost">預估花費 ({trip?.currency})</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[oklch(0.65_0.06_220)]" />
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
+                  id="cost"
                   type="number"
-                  placeholder="0"
                   value={form.cost}
                   onChange={(e) => setForm((prev) => ({ ...prev, cost: e.target.value }))}
-                  className="pl-10 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-11"
+                  className="pl-10 rounded-xl"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label>
+              <Label htmlFor="notes">備註</Label>
               <Textarea
-                placeholder="注意事項、預訂資訊..."
+                id="notes"
                 value={form.notes}
                 onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                className="border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] resize-none"
-                rows={3}
+                placeholder="有什麼需要注意的地方嗎？"
+                className="rounded-xl min-h-[100px] resize-none"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">圖片（最多 5 張）</Label>
-              <CloudinaryImageUpload
+              <Label>活動照片</Label>
+              <CloudinaryImageUpload 
                 images={form.images}
-                onChange={(imgs) => setForm((prev) => ({ ...prev, images: imgs }))}
+                onImagesChange={(images) => setForm(prev => ({ ...prev, images }))}
+                maxImages={5}
               />
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowAddActivity(false)}
-                className="flex-1 border-[oklch(0.88_0.008_220)]"
+            <div className="pt-2 flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowAddActivity(false)} 
+                className="flex-1 rounded-xl h-12"
               >
                 取消
               </Button>
-              <Button
-                onClick={handleSaveActivity}
+              <Button 
+                onClick={handleSaveActivity} 
                 disabled={isSaving}
-                className="flex-1 bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.12_220)] text-white active:scale-[0.97]"
+                className="flex-1 rounded-xl h-12 bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)]"
               >
-                {isSaving ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : editingActivity ? "儲存變更" : "新增活動"}
+                {isSaving ? "儲存中..." : "儲存活動"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm */}
-      <AlertDialog open={!!deletingActivity} onOpenChange={() => setDeletingActivity(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>確定要刪除此活動？</AlertDialogTitle>
-            <AlertDialogDescription>
-              「{deletingActivity?.title}」將被永久刪除。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteActivity}
-              className="bg-red-500 hover:bg-red-600 text-white"
-            >
-              確定刪除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Share Trip Dialog */}
+      {/* ===== Share Dialog ===== */}
       <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
         <DialogContent className="max-w-md bg-white">
           <DialogHeader>
@@ -907,441 +870,82 @@ export default function TripDetail() {
               分享行程
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <p className="text-sm text-[oklch(0.55_0.05_220)]">
+          <div className="space-y-6 pt-2">
+            <p className="text-sm text-gray-500">
               輸入對方的註冊 Email，對方登入後就能在「分享行程」看到此行程。
             </p>
+            
             <div className="flex gap-2">
               <Input
-                type="email"
-                placeholder="輸入 Email 地址"
                 value={shareEmail}
                 onChange={(e) => setShareEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleShareWithEmail()}
-                className="flex-1 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-10"
+                placeholder="輸入 Email 地址"
+                className="rounded-xl"
               />
-              <Button
+              <Button 
                 onClick={handleShareWithEmail}
                 disabled={shareLoading || !shareEmail.trim()}
-                className="bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.12_220)] text-white px-4"
+                className="rounded-xl bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.14_145)]"
               >
-                {shareLoading ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  "分享"
-                )}
+                分享
               </Button>
             </div>
 
-            {/* Existing shares */}
-            <div>
-              <p className="text-xs font-medium text-[oklch(0.55_0.05_220)] mb-2">已分享對象</p>
-              {sharesLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="w-5 h-5 border-2 border-[oklch(0.88_0.008_220)] border-t-[oklch(0.62_0.12_220)] rounded-full animate-spin" />
-                </div>
-              ) : existingShares.length === 0 ? (
-                <p className="text-sm text-[oklch(0.70_0.04_220)] py-2">尚未分享給任何人</p>
-              ) : (
-                <div className="space-y-2">
-                  {existingShares.map((share) => (
-                    <div
-                      key={share.id}
-                      className="flex items-center justify-between p-2.5 rounded-lg bg-[oklch(0.97_0.008_220)]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-xs font-bold">
-                          {share.sharedWith.charAt(0).toUpperCase()}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-[oklch(0.45_0.05_220)] flex items-center gap-2">
+                <Share2 className="w-3.5 h-3.5" /> 已分享對象
+              </h4>
+              <div className="space-y-2">
+                {sharesLoading ? (
+                  <Skeleton className="h-12 w-full rounded-xl" />
+                ) : existingShares.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic py-4 text-center bg-gray-50 rounded-2xl">
+                    尚未分享給任何人
+                  </p>
+                ) : (
+                  existingShares.map((share) => (
+                    <div key={share.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-xs font-bold">
+                          {share.sharedWith[0].toUpperCase()}
                         </div>
-                        <span className="text-sm text-[oklch(0.35_0.05_220)]">{share.sharedWith}</span>
+                        <span className="text-sm text-[oklch(0.22_0.08_220)]">{share.sharedWith}</span>
                       </div>
-                      <button
+                      <button 
                         onClick={() => handleUnshare(share.sharedWith)}
-                        className="text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1 rounded hover:bg-red-50"
+                        className="text-xs text-red-500 font-bold hover:underline"
                       >
                         取消
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
 
-// Image Carousel for Activity Detail
-function ActivityImageCarousel({ images, title }: { images: string[]; title: string }) {
-  const [current, setCurrent] = useState(0);
-
-  if (images.length === 0) return null;
-
-  return (
-    <div className="rounded-xl overflow-hidden border border-[oklch(0.92_0.008_220)] relative">
-      <div className="relative aspect-video bg-[oklch(0.94_0.008_220)]">
-        <img
-          src={images[current]}
-          alt={`${title} 圖片 ${current + 1}`}
-          className="w-full h-full object-cover"
-        />
-        {images.length > 1 && (
-          <>
-            <button
-              onClick={() => setCurrent((c) => (c - 1 + images.length) % images.length)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+      {/* ===== Delete Confirmation ===== */}
+      <AlertDialog open={!!deletingActivity} onOpenChange={(open) => !open && setDeletingActivity(null)}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要刪除此活動嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作無法復原，該活動將從行程中永久移除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">取消</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteActivity}
+              className="rounded-xl bg-red-600 hover:bg-red-700"
             >
-              ‹
-            </button>
-            <button
-              onClick={() => setCurrent((c) => (c + 1) % images.length)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
-            >
-              ›
-            </button>
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
-              {images.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrent(i)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    i === current ? "bg-white scale-125" : "bg-white/50"
-                  }`}
-                />
-              ))}
-            </div>
-          </>
-        )}
-        <div className="absolute top-2 right-2 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full">
-          {current + 1} / {images.length}
-        </div>
-      </div>
+              刪除活動
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-  );
-}
-
-// Activity Detail Sheet
-function ActivityDetailSheet({
-  activity,
-  currency,
-  open,
-  onClose,
-  onEdit,
-  onDelete,
-}: {
-  activity: Activity | null;
-  currency?: string;
-  open: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  if (!activity) return null;
-  const config = categoryConfig[activity.category];
-  const Icon = config.icon;
-
-  const googleMapsUrl = activity.lat != null && activity.lng != null
-    ? `https://www.google.com/maps/dir/?api=1&destination=${activity.lat},${activity.lng}&travelmode=driving`
-    : activity.address
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activity.address)}`
-    : null;
-
-  const durationLabel = activity.duration
-    ? activity.duration >= 60
-      ? `${Math.floor(activity.duration / 60)} 小時${activity.duration % 60 > 0 ? ` ${activity.duration % 60} 分鐘` : ""}`
-      : `${activity.duration} 分鐘`
-    : null;
-
-  return (
-    <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0 bg-white">
-        {/* Category color strip */}
-        <div className={`h-1.5 w-full rounded-t-2xl ${config.dot}`} />
-
-        <div className="p-5">
-          {/* Header */}
-          <SheetHeader className="mb-4 text-left">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <SheetTitle className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)] leading-tight">
-                    {activity.title}
-                  </SheetTitle>
-                  <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${config.color}`}>
-                    {config.label}
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button
-                  onClick={() => { onClose(); onEdit(); }}
-                  className="w-8 h-8 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.55_0.05_220)] transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => { onClose(); onDelete(); }}
-                  className="w-8 h-8 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </SheetHeader>
-
-          {/* Info rows */}
-          <div className="space-y-3">
-            {/* Time & Duration */}
-            {(activity.time || durationLabel) && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
-                <Clock className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">時間 / 停留時間</p>
-                  <p className="text-sm font-medium text-[oklch(0.22_0.08_220)] font-['DM_Mono']">
-                    {activity.time || "—"}
-                    {durationLabel && (
-                      <span className="font-['DM_Sans'] text-[oklch(0.55_0.05_220)] font-normal ml-2">（{durationLabel}）</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Address with Google Maps link */}
-            {(activity.address || activity.location) && (
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
-                <MapPin className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">地址</p>
-                  {activity.location && (
-                    <p className="text-sm font-semibold text-[oklch(0.22_0.08_220)] mb-0.5">{activity.location}</p>
-                  )}
-                  {activity.address && (
-                    <p className="text-sm text-[oklch(0.45_0.05_220)] break-words">{activity.address}</p>
-                  )}
-                  {googleMapsUrl && (
-                    <a
-                      href={googleMapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-[oklch(0.62_0.12_220)] text-white text-xs font-medium hover:bg-[oklch(0.55_0.12_220)] transition-colors active:scale-[0.97]"
-                    >
-                      <MapPin className="w-3 h-3" />
-                      在 Google Maps 導航
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Cost */}
-            {activity.cost != null && activity.cost > 0 && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
-                <DollarSign className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">費用</p>
-                  <p className="text-sm font-bold text-[oklch(0.22_0.08_220)] font-['DM_Mono']">
-                    {activity.cost.toLocaleString()} {currency || "TWD"}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {activity.notes && (
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-[oklch(0.97_0.008_220)]">
-                <FileText className="w-4 h-4 text-[oklch(0.62_0.12_220)] flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-xs text-[oklch(0.55_0.05_220)] mb-0.5">行程說明 / 備註</p>
-                  <p className="text-sm text-[oklch(0.35_0.05_220)] leading-relaxed whitespace-pre-wrap">{activity.notes}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Images carousel */}
-            {activity.images && activity.images.length > 0 && (
-              <ActivityImageCarousel images={activity.images} title={activity.title} />
-            )}
-
-            {/* Map preview */}
-            {activity.lat != null && activity.lng != null && (
-              <div className="rounded-xl overflow-hidden border border-[oklch(0.92_0.008_220)]">
-                <MapPreview
-                  lat={activity.lat}
-                  lng={activity.lng}
-                  title={activity.location ?? undefined}
-                  address={activity.address ?? undefined}
-                  compact
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-// Activity Card Component
-function ActivityCard({
-  activity,
-  index,
-  currency,
-  isDragging,
-  isDragOver,
-  hasConflict,
-  onEdit,
-  onDelete,
-}: {
-  activity: Activity;
-  index: number;
-  currency?: string;
-  isDragging?: boolean;
-  isDragOver?: boolean;
-  hasConflict?: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [showDetail, setShowDetail] = useState(false);
-  const config = categoryConfig[activity.category];
-  const Icon = config.icon;
-
-  return (
-    <>
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-      className="flex gap-4"
-    >
-      {/* Timeline dot */}
-      <div className="flex flex-col items-center flex-shrink-0 pt-3">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center z-10 ${config.color}`}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-
-      {/* Card */}
-      <div
-        className="flex-1 bg-white rounded-xl border border-[oklch(0.92_0.008_220)] overflow-hidden hover:shadow-md transition-shadow duration-200 mb-2 cursor-pointer active:scale-[0.99]"
-        onClick={() => setShowDetail(true)}
-      >
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-start gap-2 flex-1 min-w-0">
-              <div
-                className="mt-1 cursor-grab active:cursor-grabbing text-[oklch(0.65_0.05_220)] hover:text-[oklch(0.55_0.05_220)] transition-colors flex-shrink-0"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <GripVertical className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-[oklch(0.22_0.08_220)]">{activity.title}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${config.color}`}>
-                  {config.label}
-                </span>
-              </div>
-
-              {hasConflict && (
-                <div className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs">
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="font-medium">時間與其他活動重疊</span>
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-[oklch(0.55_0.05_220)]">
-                {activity.time && (
-                  <div className={`flex items-center gap-1 ${hasConflict ? "text-amber-600 font-medium" : ""}`}>
-                    <Clock className="w-3 h-3" />
-                    <span className="font-['DM_Mono']">{activity.time}</span>
-                    {activity.duration && (
-                      <span className="text-[oklch(0.72_0.05_220)]">({activity.duration} 分鐘)</span>
-                    )}
-                  </div>
-                )}
-                {activity.location && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    <span>{activity.location}</span>
-                  </div>
-                )}
-                {activity.cost != null && activity.cost > 0 && (
-                  <div className="flex items-center gap-1 text-[oklch(0.62_0.12_220)] font-medium">
-                    <DollarSign className="w-3 h-3" />
-                    <span className="font-['DM_Mono']">{activity.cost.toLocaleString()} {currency || "TWD"}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            </div>
-
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="w-7 h-7 rounded-lg hover:bg-[oklch(0.94_0.008_220)] flex items-center justify-center text-[oklch(0.65_0.05_220)] transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onEdit} className="gap-2">
-                    <Edit3 className="w-4 h-4" />
-                    編輯
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onDelete} className="gap-2 text-red-600">
-                    <Trash2 className="w-4 h-4" />
-                    刪除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-
-    {/* Activity Detail Sheet */}
-    <ActivityDetailSheet
-      activity={activity}
-      currency={currency}
-      open={showDetail}
-      onClose={() => setShowDetail(false)}
-      onEdit={onEdit}
-      onDelete={onDelete}
-    />
-    </>
-  );
-}
-
-// Day empty state
-function DayEmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center py-16 text-center"
-    >
-      <div className="w-16 h-16 rounded-2xl bg-[oklch(0.94_0.008_220)] flex items-center justify-center mb-4">
-        <Calendar className="w-8 h-8 text-[oklch(0.72_0.06_220)]" />
-      </div>
-      <h3 className="font-['Playfair_Display'] text-lg font-bold text-[oklch(0.35_0.06_220)] mb-2">
-        這天還沒有安排
-      </h3>
-      <p className="text-[oklch(0.55_0.05_220)] text-sm mb-5">
-        新增景點、餐廳或住宿，開始規劃這天的行程
-      </p>
-      <Button
-        onClick={onAdd}
-        variant="outline"
-        className="border-[oklch(0.82_0.06_220)] text-[oklch(0.62_0.12_220)] gap-2"
-      >
-        <Plus className="w-4 h-4" />
-        新增第一個活動
-      </Button>
-    </motion.div>
   );
 }
