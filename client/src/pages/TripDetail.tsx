@@ -27,6 +27,8 @@ import {
   Share2,
   ChevronUp,
   ChevronDown,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
@@ -92,6 +94,137 @@ const defaultActivityForm: ActivityForm = {
   images: [],
 };
 
+// ActivityDetail Component (Sheet/Dialog for viewing)
+function ActivityDetailSheet({ 
+  activity, 
+  currency, 
+  open, 
+  onClose,
+  onEdit,
+  onDelete
+}: { 
+  activity: Activity; 
+  currency?: string; 
+  open: boolean; 
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const config = categoryConfig[activity.category] || categoryConfig.OTHER;
+  
+  const handleOpenInGoogleMaps = () => {
+    const query = activity.address || activity.location || activity.title;
+    if (!query) return;
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-md bg-white overflow-y-auto p-0">
+        <div className="p-6">
+          <SheetHeader className="mb-6 relative">
+            <div className="flex items-center justify-between mb-4">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${config.color}`}>
+                {config.label}
+              </span>
+              <div className="flex items-center gap-4 mr-8"> {/* Increased gap and added margin to avoid X button */}
+                <Button variant="ghost" size="icon" onClick={onEdit} className="w-8 h-8 rounded-full hover:bg-gray-100">
+                  <Edit3 className="w-4 h-4 text-gray-600" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onDelete} className="w-8 h-8 rounded-full hover:bg-red-50 text-red-500">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            <SheetTitle className="text-3xl font-black text-[oklch(0.22_0.08_220)] text-left leading-tight">
+              {activity.title}
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="space-y-8">
+            {/* Time and Stats */}
+            <div className="flex flex-wrap gap-6">
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">時間</div>
+                <div className="flex items-center gap-2 font-bold text-[oklch(0.22_0.08_220)]">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  {activity.time || "未設定"}
+                </div>
+              </div>
+              {activity.duration && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">時長</div>
+                  <div className="font-bold text-[oklch(0.22_0.08_220)]">{activity.duration} 分鐘</div>
+                </div>
+              )}
+              {activity.cost && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">花費</div>
+                  <div className="flex items-center gap-1 font-bold text-[oklch(0.22_0.08_220)]">
+                    <DollarSign className="w-4 h-4 text-gray-400" />
+                    {activity.cost.toLocaleString()} {currency}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Location Link */}
+            <div className="space-y-3">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">地點</div>
+              <button 
+                onClick={handleOpenInGoogleMaps}
+                className="w-full text-left group bg-gray-50 hover:bg-[oklch(0.95_0.02_220)] rounded-2xl p-4 transition-all border border-transparent hover:border-[oklch(0.8_0.05_220)]"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                    <MapPin className="w-5 h-5 text-[oklch(0.62_0.12_220)]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-[oklch(0.22_0.08_220)] flex items-center gap-1.5">
+                      {activity.location || "開啟地圖搜尋"}
+                      <ExternalLink className="w-3 h-3 text-gray-400" />
+                    </div>
+                    {activity.address && <div className="text-xs text-gray-500 mt-0.5 truncate">{activity.address}</div>}
+                  </div>
+                </div>
+              </button>
+              {(activity as any).lat && (activity as any).lng && (
+                <div className="h-48 rounded-2xl overflow-hidden shadow-inner border border-gray-100">
+                  <MapPreview lat={(activity as any).lat} lng={(activity as any).lng} title={activity.location} />
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {activity.notes && (
+              <div className="space-y-3">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">備註</div>
+                <div className="bg-[oklch(0.98_0.005_220)] p-5 rounded-2xl border border-[oklch(0.95_0.005_220)] italic text-[oklch(0.35_0.06_220)] whitespace-pre-wrap leading-relaxed">
+                  "{activity.notes}"
+                </div>
+              </div>
+            )}
+
+            {/* Images */}
+            {activity.images && activity.images.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">照片</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {activity.images.map((img, idx) => (
+                    <div key={idx} className="aspect-square rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 shadow-sm">
+                      <img src={img} alt={`${activity.title} - ${idx}`} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ActivityCard Component
 function ActivityCard({ 
   activity, 
@@ -116,10 +249,11 @@ function ActivityCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
+  const [showDetail, setShowDetail] = useState(false);
   const config = categoryConfig[activity.category] || categoryConfig.OTHER;
-  const Icon = config.icon;
 
   return (
+    <>
     <div className="group relative flex gap-4 items-start">
       {/* Time column */}
       <div className="w-12 pt-1 flex flex-col items-center">
@@ -130,7 +264,10 @@ function ActivityCard({
       </div>
 
       {/* Content card */}
-      <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4">
+      <div 
+        onClick={() => setShowDetail(true)}
+        className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4 cursor-pointer"
+      >
         <div className="flex-1">
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
@@ -147,15 +284,18 @@ function ActivityCard({
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                <button 
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                >
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onEdit} className="gap-2">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }} className="gap-2">
                   <Edit3 className="w-4 h-4" /> 編輯
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDelete} className="text-red-600 gap-2">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-600 gap-2">
                   <Trash2 className="w-4 h-4" /> 刪除
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -187,18 +327,12 @@ function ActivityCard({
               )}
             </div>
           </div>
-
-          {activity.notes && (
-            <p className="mt-3 text-xs text-gray-400 line-clamp-2 italic">
-              "{activity.notes}"
-            </p>
-          )}
         </div>
 
         {/* Reorder arrows */}
         <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)]">
           <button 
-            onClick={onMoveUp}
+            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
             disabled={isFirst}
             className={`p-1.5 rounded-lg transition-colors ${isFirst ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-100 hover:text-[oklch(0.22_0.08_220)]'}`}
             title="上移"
@@ -206,7 +340,7 @@ function ActivityCard({
             <ChevronUp className="w-5 h-5" />
           </button>
           <button 
-            onClick={onMoveDown}
+            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
             disabled={isLast}
             className={`p-1.5 rounded-lg transition-colors ${isLast ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-100 hover:text-[oklch(0.22_0.08_220)]'}`}
             title="下移"
@@ -216,6 +350,17 @@ function ActivityCard({
         </div>
       </div>
     </div>
+
+    {/* Detail Sheet */}
+    <ActivityDetailSheet 
+      activity={activity}
+      currency={currency}
+      open={showDetail}
+      onClose={() => setShowDetail(false)}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+    </>
   );
 }
 
@@ -331,7 +476,8 @@ export default function TripDetail() {
     try {
       await reorderActivities(orders);
       toast.success("順序已更新");
-    } catch {
+    } catch (err) {
+      console.error("Reorder failed:", err);
       toast.error("更新順序失敗");
     }
   };
