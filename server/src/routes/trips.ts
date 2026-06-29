@@ -54,6 +54,51 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   res.status(201).json({ trip });
 });
 
+// ── IMPORTANT: 所有靜態路由必須放在 /:id 之前 ──────────────
+
+// ── GET /api/trips/shared-with-me ────────────────────────
+// 取得分享給我的所有行程（必須在 /:id 之前）
+router.get("/shared-with-me", requireAuth, async (req: AuthRequest, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) {
+    res.status(401).json({ error: "未授權" });
+    return;
+  }
+
+  // 使用 toLowerCase 確保 email 比對不受大小寫影響
+  const userEmail = user.email.toLowerCase();
+
+  const shares = await prisma.tripShare.findMany({
+    where: { sharedWith: userEmail },
+    include: {
+      trip: {
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          _count: { select: { activities: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const trips = shares.map((s: typeof shares[number]) => ({ ...s.trip, sharedAt: s.createdAt, sharedBy: s.trip.user }));
+  res.json({ trips });
+});
+
+// ── GET /api/trips/shared/:token ─────────────────────────
+router.get("/shared/:token", async (req, res: Response) => {
+  const trip = await prisma.trip.findFirst({
+    where: { shareToken: req.params.token },
+    include: { activities: { orderBy: [{ day: "asc" }, { sortOrder: "asc" }] } },
+  });
+
+  if (!trip) {
+    res.status(404).json({ error: "分享連結無效或已失效" });
+    return;
+  }
+  res.json({ trip });
+});
+
 // ── GET /api/trips/:id ───────────────────────────────────
 router.get("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   const trip = await prisma.trip.findFirst({
@@ -177,23 +222,26 @@ router.post("/:id/share-with", requireAuth, async (req: AuthRequest, res: Respon
     return;
   }
 
-  const { email } = parsed.data;
+  // 統一轉小寫避免大小寫問題
+  const email = parsed.data.email.toLowerCase();
 
   // 不能分享給自己
   const owner = await prisma.user.findUnique({ where: { id: req.userId } });
-  if (owner?.email === email) {
+  if (owner?.email.toLowerCase() === email) {
     res.status(400).json({ error: "不能分享給自己" });
     return;
   }
 
-  // 確認對方帳號存在
-  const recipient = await prisma.user.findUnique({ where: { email } });
+  // 確認對方帳號存在（用 toLowerCase 比對）
+  const recipient = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
   if (!recipient) {
     res.status(404).json({ error: "找不到此電子郵件的使用者，請確認對方已註冊" });
     return;
   }
 
-  // 建立分享記錄（若已分享則忽略）
+  // 建立分享記錄（若已分享則忽略），sharedWith 統一存小寫
   await prisma.tripShare.upsert({
     where: { tripId_sharedWith: { tripId: req.params.id, sharedWith: email } },
     create: { tripId: req.params.id, ownerId: req.userId!, sharedWith: email },
@@ -221,8 +269,10 @@ router.delete("/:id/share-with", requireAuth, async (req: AuthRequest, res: Resp
     return;
   }
 
+  const email = parsed.data.email.toLowerCase();
+
   await prisma.tripShare.deleteMany({
-    where: { tripId: req.params.id, sharedWith: parsed.data.email },
+    where: { tripId: req.params.id, sharedWith: email },
   });
 
   res.json({ message: "已取消分享" });
@@ -245,47 +295,6 @@ router.get("/:id/shares", requireAuth, async (req: AuthRequest, res: Response) =
   });
 
   res.json({ shares });
-});
-
-// ── GET /api/trips/shared-with-me ────────────────────────
-// 取得分享給我的所有行程（需放在 /:id 路由之前）
-router.get("/shared-with-me", requireAuth, async (req: AuthRequest, res: Response) => {
-  // 取得當前使用者 email
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  if (!user) {
-    res.status(401).json({ error: "未授權" });
-    return;
-  }
-
-  const shares = await prisma.tripShare.findMany({
-    where: { sharedWith: user.email },
-    include: {
-      trip: {
-        include: {
-          user: { select: { id: true, name: true, email: true } },
-          _count: { select: { activities: true } },
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const trips = shares.map((s: typeof shares[number]) => ({ ...s.trip, sharedAt: s.createdAt, sharedBy: s.trip.user }));
-  res.json({ trips });
-});
-
-// ── GET /api/trips/shared/:token ─────────────────────────
-router.get("/shared/:token", async (req, res: Response) => {
-  const trip = await prisma.trip.findFirst({
-    where: { shareToken: req.params.token },
-    include: { activities: { orderBy: [{ day: "asc" }, { sortOrder: "asc" }] } },
-  });
-
-  if (!trip) {
-    res.status(404).json({ error: "分享連結無效或已失效" });
-    return;
-  }
-  res.json({ trip });
 });
 
 export default router;
