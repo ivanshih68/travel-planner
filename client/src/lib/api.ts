@@ -82,6 +82,7 @@ export interface Activity {
   lng: number | null;
   cost: number | null;
   notes: string | null;
+  images: string[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -169,6 +170,7 @@ export const activitiesApi = {
       lng?: number;
       cost?: number;
       notes?: string;
+      images?: string[];
       sortOrder?: number;
     }
   ) =>
@@ -187,4 +189,32 @@ export const activitiesApi = {
     orders: { id: string; sortOrder: number }[]
   ) =>
     api.patch(`/api/trips/${tripId}/activities/reorder`, { orders }),
+};
+
+// ── Trip Sharing API ─────────────────────────────────
+export interface TripShare {
+  id: string;
+  tripId: string;
+  ownerId: string;
+  sharedWith: string;
+  createdAt: string;
+}
+
+export interface SharedTrip extends Trip {
+  sharedAt: string;
+  sharedBy: { id: string; name: string; email: string };
+}
+
+export const tripSharingApi = {
+  shareWith: (tripId: string, email: string) =>
+    api.post<{ message: string }>(`/api/trips/${tripId}/share-with`, { email }),
+
+  unshareWith: (tripId: string, email: string) =>
+    api.delete<{ message: string }>(`/api/trips/${tripId}/share-with`, { data: { email } }),
+
+  getShares: (tripId: string) =>
+    api.get<{ shares: TripShare[] }>(`/api/trips/${tripId}/shares`),
+
+  getSharedWithMe: () =>
+    api.get<{ trips: SharedTrip[] }>(`/api/trips/shared-with-me`),
 };

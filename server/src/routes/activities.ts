@@ -19,6 +19,7 @@ const activitySchema = z.object({
   lng: z.number().optional().nullable(),
   cost: z.number().min(0).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
+  images: z.array(z.string().url()).max(5).optional().default([]),
   sortOrder: z.number().int().default(0),
 });
 

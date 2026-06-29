@@ -45,13 +45,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { CloudinaryImageUpload } from "@/components/CloudinaryImageUpload";
 import { useActivities } from "@/hooks/useActivities";
 import { useDragSort } from "@/hooks/useDragSort";
 import { useTouchDragSort } from "@/hooks/useTouchDragSort";
 import { useIsMobile } from "@/hooks/useMobile";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
-import { tripsApi, type Trip, type Activity } from "@/lib/api";
+import { tripsApi, tripSharingApi, type Trip, type Activity, type TripShare } from "@/lib/api";
 import { exportTripToPdf } from "@/lib/exportPdf";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
@@ -75,6 +76,7 @@ interface ActivityForm {
   duration: string;
   lat?: number;
   lng?: number;
+  images: string[];
 }
 
 const defaultActivityForm: ActivityForm = {
@@ -88,6 +90,7 @@ const defaultActivityForm: ActivityForm = {
   duration: "",
   lat: undefined,
   lng: undefined,
+  images: [],
 };
 
 export default function TripDetail() {
@@ -108,6 +111,11 @@ export default function TripDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [existingShares, setExistingShares] = useState<TripShare[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
 
   // Load trip data
   useEffect(() => {
@@ -263,6 +271,7 @@ export default function TripDetail() {
       duration: activity.duration?.toString() || "",
       lat: (activity as any).lat,
       lng: (activity as any).lng,
+      images: activity.images || [],
     });
     setShowAddActivity(true);
   };
@@ -287,6 +296,7 @@ export default function TripDetail() {
         duration: form.duration ? parseInt(form.duration) : undefined,
         lat: form.lat,
         lng: form.lng,
+        images: form.images,
       };
 
       if (editingActivity?.id) {
@@ -326,16 +336,46 @@ export default function TripDetail() {
   // ── Share trip ──────────────────────────────────────────────────────────
   const handleShareTrip = async () => {
     if (!tripId) return;
-    setIsSharing(true);
+    // Open share dialog and load existing shares
+    setShowShareDialog(true);
+    setShareEmail("");
+    setSharesLoading(true);
     try {
-      const { data } = await tripsApi.share(tripId);
-      const shareUrl = `${window.location.origin}/share/${data.shareToken}`;
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("分享連結已複製到剪貼簿！");
+      const { data } = await tripSharingApi.getShares(tripId);
+      setExistingShares(data.shares);
     } catch {
-      toast.error("建立分享連結失敗");
+      setExistingShares([]);
     } finally {
-      setIsSharing(false);
+      setSharesLoading(false);
+    }
+  };
+
+  const handleShareWithEmail = async () => {
+    if (!tripId || !shareEmail.trim()) return;
+    setShareLoading(true);
+    try {
+      await tripSharingApi.shareWith(tripId, shareEmail.trim());
+      toast.success(`已分享給 ${shareEmail}`);
+      setShareEmail("");
+      // Refresh shares list
+      const { data } = await tripSharingApi.getShares(tripId);
+      setExistingShares(data.shares);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "分享失敗，請確認對方帳號已註冊";
+      toast.error(msg);
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleUnshare = async (email: string) => {
+    if (!tripId) return;
+    try {
+      await tripSharingApi.unshareWith(tripId, email);
+      setExistingShares((prev) => prev.filter((s) => s.sharedWith !== email));
+      toast.success(`已取消分享`);
+    } catch {
+      toast.error("取消分享失敗");
     }
   };
 
@@ -808,6 +848,14 @@ export default function TripDetail() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">圖片（最多 5 張）</Label>
+              <CloudinaryImageUpload
+                images={form.images}
+                onChange={(imgs) => setForm((prev) => ({ ...prev, images: imgs }))}
+              />
+            </div>
+
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
@@ -850,6 +898,126 @@ export default function TripDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Share Trip Dialog */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="font-['Playfair_Display'] text-xl text-[oklch(0.22_0.08_220)]">
+              分享行程
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-[oklch(0.55_0.05_220)]">
+              輸入對方的註冊 Email，對方登入後就能在「分享行程」看到此行程。
+            </p>
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder="輸入 Email 地址"
+                value={shareEmail}
+                onChange={(e) => setShareEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleShareWithEmail()}
+                className="flex-1 border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)] h-10"
+              />
+              <Button
+                onClick={handleShareWithEmail}
+                disabled={shareLoading || !shareEmail.trim()}
+                className="bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.12_220)] text-white px-4"
+              >
+                {shareLoading ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  "分享"
+                )}
+              </Button>
+            </div>
+
+            {/* Existing shares */}
+            <div>
+              <p className="text-xs font-medium text-[oklch(0.55_0.05_220)] mb-2">已分享對象</p>
+              {sharesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-5 h-5 border-2 border-[oklch(0.88_0.008_220)] border-t-[oklch(0.62_0.12_220)] rounded-full animate-spin" />
+                </div>
+              ) : existingShares.length === 0 ? (
+                <p className="text-sm text-[oklch(0.70_0.04_220)] py-2">尚未分享給任何人</p>
+              ) : (
+                <div className="space-y-2">
+                  {existingShares.map((share) => (
+                    <div
+                      key={share.id}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-[oklch(0.97_0.008_220)]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-xs font-bold">
+                          {share.sharedWith.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm text-[oklch(0.35_0.05_220)]">{share.sharedWith}</span>
+                      </div>
+                      <button
+                        onClick={() => handleUnshare(share.sharedWith)}
+                        className="text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1 rounded hover:bg-red-50"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Image Carousel for Activity Detail
+function ActivityImageCarousel({ images, title }: { images: string[]; title: string }) {
+  const [current, setCurrent] = useState(0);
+
+  if (images.length === 0) return null;
+
+  return (
+    <div className="rounded-xl overflow-hidden border border-[oklch(0.92_0.008_220)] relative">
+      <div className="relative aspect-video bg-[oklch(0.94_0.008_220)]">
+        <img
+          src={images[current]}
+          alt={`${title} 圖片 ${current + 1}`}
+          className="w-full h-full object-cover"
+        />
+        {images.length > 1 && (
+          <>
+            <button
+              onClick={() => setCurrent((c) => (c - 1 + images.length) % images.length)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setCurrent((c) => (c + 1) % images.length)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+            >
+              ›
+            </button>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrent(i)}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${
+                    i === current ? "bg-white scale-125" : "bg-white/50"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+        <div className="absolute top-2 right-2 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full">
+          {current + 1} / {images.length}
+        </div>
+      </div>
     </div>
   );
 }
@@ -993,6 +1161,11 @@ function ActivityDetailSheet({
                   <p className="text-sm text-[oklch(0.35_0.05_220)] leading-relaxed whitespace-pre-wrap">{activity.notes}</p>
                 </div>
               </div>
+            )}
+
+            {/* Images carousel */}
+            {activity.images && activity.images.length > 0 && (
+              <ActivityImageCarousel images={activity.images} title={activity.title} />
             )}
 
             {/* Map preview */}

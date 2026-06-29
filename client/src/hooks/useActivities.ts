@@ -64,6 +64,7 @@ export const useActivities = (tripId: string | null | undefined) => {
       lng?: number;
       cost?: number;
       notes?: string;
+      images?: string[];
       sortOrder?: number;
     }) => {
       if (!tripId) throw new Error("tripId is required");

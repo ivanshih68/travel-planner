@@ -19,29 +19,31 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  trips Trip[]
+  trips      Trip[]
+  tripShares TripShare[] @relation("TripShareOwner")
 
   @@map("users")
 }
 
 model Trip {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
   title       String
   destination String
-  startDate   DateTime  @map("start_date") @db.Date
-  endDate     DateTime  @map("end_date") @db.Date
+  startDate   DateTime   @map("start_date") @db.Date
+  endDate     DateTime   @map("end_date") @db.Date
   description String?
-  budget      Decimal?  @db.Decimal(12, 2)
-  currency    String    @default("TWD")
+  budget      Decimal?   @db.Decimal(12, 2)
+  currency    String     @default("TWD")
   status      TripStatus @default(PLANNING)
-  coverImage  String?   @map("cover_image")
-  shareToken  String?   @unique @map("share_token")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  coverImage  String?    @map("cover_image")
+  shareToken  String?    @unique @map("share_token")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   activities Activity[]
+  shares     TripShare[]
 
   @@index([userId])
   @@map("trips")
@@ -62,6 +64,7 @@ model Activity {
   lng       Decimal?         @db.Decimal(10, 7)
   cost      Decimal?         @db.Decimal(10, 2)
   notes     String?
+  images    String[]         @default([])
   sortOrder Int              @default(0) @map("sort_order")
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
@@ -71,6 +74,21 @@ model Activity {
   @@index([tripId])
   @@index([tripId, day])
   @@map("activities")
+}
+
+model TripShare {
+  id         String   @id @default(uuid())
+  tripId     String   @map("trip_id")
+  ownerId    String   @map("owner_id")
+  sharedWith String   @map("shared_with") // email of recipient
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  trip  Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  owner User @relation("TripShareOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, sharedWith])
+  @@index([sharedWith])
+  @@map("trip_shares")
 }
 
 enum TripStatus {

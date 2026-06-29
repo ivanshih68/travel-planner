@@ -153,10 +153,125 @@ router.post("/:id/share", requireAuth, async (req: AuthRequest, res: Response) =
   const shareToken = trip.shareToken ?? crypto.randomBytes(32).toString("hex");
   await prisma.trip.update({
     where: { id: req.params.id },
-    data: { shareToken, isPublic: true },
+    data: { shareToken },
   });
 
   res.json({ shareToken });
+});
+
+// ── POST /api/trips/:id/share-with ───────────────────────
+// 分享行程給指定 email 的使用者
+router.post("/:id/share-with", requireAuth, async (req: AuthRequest, res: Response) => {
+  const trip = await prisma.trip.findFirst({
+    where: { id: req.params.id, userId: req.userId },
+  });
+  if (!trip) {
+    res.status(404).json({ error: "行程不存在" });
+    return;
+  }
+
+  const schema = z.object({ email: z.string().email("請輸入有效的電子郵件") });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0].message });
+    return;
+  }
+
+  const { email } = parsed.data;
+
+  // 不能分享給自己
+  const owner = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (owner?.email === email) {
+    res.status(400).json({ error: "不能分享給自己" });
+    return;
+  }
+
+  // 確認對方帳號存在
+  const recipient = await prisma.user.findUnique({ where: { email } });
+  if (!recipient) {
+    res.status(404).json({ error: "找不到此電子郵件的使用者，請確認對方已註冊" });
+    return;
+  }
+
+  // 建立分享記錄（若已分享則忽略）
+  await prisma.tripShare.upsert({
+    where: { tripId_sharedWith: { tripId: req.params.id, sharedWith: email } },
+    create: { tripId: req.params.id, ownerId: req.userId!, sharedWith: email },
+    update: {},
+  });
+
+  res.json({ message: `行程已分享給 ${recipient.name}（${email}）` });
+});
+
+// ── DELETE /api/trips/:id/share-with ─────────────────────
+// 取消分享
+router.delete("/:id/share-with", requireAuth, async (req: AuthRequest, res: Response) => {
+  const trip = await prisma.trip.findFirst({
+    where: { id: req.params.id, userId: req.userId },
+  });
+  if (!trip) {
+    res.status(404).json({ error: "行程不存在" });
+    return;
+  }
+
+  const schema = z.object({ email: z.string().email() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "格式錯誤" });
+    return;
+  }
+
+  await prisma.tripShare.deleteMany({
+    where: { tripId: req.params.id, sharedWith: parsed.data.email },
+  });
+
+  res.json({ message: "已取消分享" });
+});
+
+// ── GET /api/trips/:id/shares ─────────────────────────────
+// 取得此行程已分享給哪些人
+router.get("/:id/shares", requireAuth, async (req: AuthRequest, res: Response) => {
+  const trip = await prisma.trip.findFirst({
+    where: { id: req.params.id, userId: req.userId },
+  });
+  if (!trip) {
+    res.status(404).json({ error: "行程不存在" });
+    return;
+  }
+
+  const shares = await prisma.tripShare.findMany({
+    where: { tripId: req.params.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  res.json({ shares });
+});
+
+// ── GET /api/trips/shared-with-me ────────────────────────
+// 取得分享給我的所有行程（需放在 /:id 路由之前）
+router.get("/shared-with-me", requireAuth, async (req: AuthRequest, res: Response) => {
+  // 取得當前使用者 email
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) {
+    res.status(401).json({ error: "未授權" });
+    return;
+  }
+
+  const shares = await prisma.tripShare.findMany({
+    where: { sharedWith: user.email },
+    include: {
+      trip: {
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          _count: { select: { activities: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const trips = shares.map((s: typeof shares[number]) => ({ ...s.trip, sharedAt: s.createdAt, sharedBy: s.trip.user }));
+  res.json({ trips });
 });
 
 // ── GET /api/trips/shared/:token ─────────────────────────

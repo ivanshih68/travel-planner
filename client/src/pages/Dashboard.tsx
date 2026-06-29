@@ -8,7 +8,7 @@
  * - Cover image upload per trip card (base64 stored in Firestore)
  */
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -43,7 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTrips } from "@/hooks/useTrips";
-import { type Trip } from "@/lib/api";
+import { type Trip, type SharedTrip, tripSharingApi } from "@/lib/api";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
 const CARD_IMG_1 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/travel-card-1-5S2pMWQ95V9wp6iGv7j3yH.webp";
@@ -108,6 +108,18 @@ export default function Dashboard() {
   const [deletingTrip, setDeletingTrip] = useState<Trip | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [mobileTab, setMobileTab] = useState<"trips" | "profile">("trips");
+
+  const [sharedTrips, setSharedTrips] = useState<SharedTrip[]>([]);
+  const [sharedLoading, setSharedLoading] = useState(true);
+
+  // Load shared trips
+  useEffect(() => {
+    setSharedLoading(true);
+    tripSharingApi.getSharedWithMe()
+      .then(({ data }) => setSharedTrips(data.trips))
+      .catch(() => setSharedTrips([]))
+      .finally(() => setSharedLoading(false));
+  }, []);
 
   const [form, setForm] = useState<NewTripForm>({
     title: "",
@@ -375,6 +387,81 @@ export default function Dashboard() {
                 />
               ))}
             </motion.div>
+          )}
+
+          {/* Shared Trips Section */}
+          {(sharedLoading || sharedTrips.length > 0) && (
+            <div className="mt-10">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-[oklch(0.72_0.14_35)]/15 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-[oklch(0.62_0.14_35)]" />
+                </div>
+                <div>
+                  <h2 className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)]">分享行程</h2>
+                  <p className="text-xs text-[oklch(0.55_0.05_220)]">其他人分享給你的行程</p>
+                </div>
+              </div>
+              {sharedLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+                  {[1, 2].map((i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
+                </div>
+              ) : (
+                <motion.div
+                  className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6"
+                  initial="hidden"
+                  animate="visible"
+                  variants={{ visible: { transition: { staggerChildren: 0.06 } }, hidden: {} }}
+                >
+                  {sharedTrips.map((trip, index) => (
+                    <motion.div
+                      key={trip.id}
+                      variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.23, 1, 0.32, 1] } } }}
+                      className="relative group cursor-pointer"
+                      onClick={() => setLocation(`/trip/${trip.id}`)}
+                    >
+                      <div className="rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] bg-white hover:shadow-md transition-shadow duration-200">
+                        <div className="relative h-44 overflow-hidden">
+                          <img
+                            src={trip.coverImage || CARD_IMAGES[index % CARD_IMAGES.length]}
+                            alt={trip.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                          {/* Shared badge */}
+                          <div className="absolute top-3 left-3 bg-[oklch(0.72_0.14_35)] text-white text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+                            <Globe className="w-3 h-3" />
+                            分享
+                          </div>
+                          <div className="absolute bottom-3 right-3 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full">
+                            {getTripDuration(trip.startDate, trip.endDate)} 天
+                          </div>
+                        </div>
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-semibold text-[oklch(0.22_0.08_220)] text-base leading-tight line-clamp-1">{trip.title}</h3>
+                            <ChevronRight className="w-4 h-4 text-[oklch(0.65_0.05_220)] flex-shrink-0 mt-0.5" />
+                          </div>
+                          <div className="flex items-center gap-1 mt-1.5 text-sm text-[oklch(0.52_0.05_220)]">
+                            <MapPin className="w-3.5 h-3.5" />
+                            <span className="truncate">{trip.destination}</span>
+                          </div>
+                          <div className="flex items-center gap-1 mt-1 text-xs text-[oklch(0.65_0.05_220)]">
+                            <Calendar className="w-3 h-3" />
+                            <span>{formatDate(trip.startDate)} – {formatDate(trip.endDate)}</span>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-[oklch(0.94_0.008_220)] flex items-center gap-1.5 text-xs text-[oklch(0.65_0.05_220)]">
+                            <div className="w-4 h-4 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-[9px] font-bold">
+                              {trip.sharedBy?.name?.[0]?.toUpperCase() || "?"}
+                            </div>
+                            <span>{trip.sharedBy?.name || trip.sharedBy?.email} 分享給你</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </motion.div>
+              )}
+            </div>
           )}
         </div>
       </main>
