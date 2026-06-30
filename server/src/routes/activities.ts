@@ -64,7 +64,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   const { tripId } = req.params;
   const access = await checkTripAccess(tripId as string, req.userId!);
   
-  // 允許擁有者與被分享者新增活動
   if (!access) {
     res.status(403).json({ error: "您沒有權限在此行程新增活動" });
     return;
@@ -90,6 +89,36 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   res.status(201).json({ activity });
 });
 
+// ── PATCH /api/trips/:tripId/activities/reorder ──────────
+// 注意：必須放在 /:id 之前，避免被攔截
+router.patch("/reorder", requireAuth, async (req: AuthRequest, res: Response) => {
+  const { tripId } = req.params;
+  const access = await checkTripAccess(tripId as string, req.userId!);
+  
+  if (!access) {
+    res.status(403).json({ error: "您沒有權限修改排序" });
+    return;
+  }
+
+  const schema = z.object({
+    orders: z.array(z.object({ id: z.string(), sortOrder: z.number().int() })),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "格式錯誤" });
+    return;
+  }
+
+  await prisma.$transaction(
+    parsed.data.orders.map(({ id, sortOrder }) =>
+      prisma.activity.update({ where: { id }, data: { sortOrder } })
+    )
+  );
+
+  res.json({ message: "排序已更新" });
+});
+
 // ── PATCH /api/activities/:id ────────────────────────────
 router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   const activity = await prisma.activity.findFirst({
@@ -104,7 +133,6 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
 
   const access = await checkTripAccess(activity.trip.id, req.userId!);
   
-  // 允許擁有者與被分享者修改活動
   if (!access) {
     res.status(403).json({ error: "您沒有權限修改此活動" });
     return;
@@ -144,7 +172,6 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
 
   const access = await checkTripAccess(activity.trip.id, req.userId!);
 
-  // 允許擁有者與被分享者刪除活動
   if (!access) {
     res.status(403).json({ error: "您沒有權限刪除此活動" });
     return;
@@ -152,36 +179,6 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
 
   await prisma.activity.delete({ where: { id: req.params.id } });
   res.json({ message: "活動已刪除" });
-});
-
-// ── PATCH /api/trips/:tripId/activities/reorder ──────────
-router.patch("/reorder", requireAuth, async (req: AuthRequest, res: Response) => {
-  const { tripId } = req.params;
-  const access = await checkTripAccess(tripId as string, req.userId!);
-  
-  // 允許擁有者與被分享者重新排序
-  if (!access) {
-    res.status(403).json({ error: "您沒有權限修改排序" });
-    return;
-  }
-
-  const schema = z.object({
-    orders: z.array(z.object({ id: z.string(), sortOrder: z.number().int() })),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "格式錯誤" });
-    return;
-  }
-
-  await prisma.$transaction(
-    parsed.data.orders.map(({ id, sortOrder }) =>
-      prisma.activity.update({ where: { id }, data: { sortOrder } })
-    )
-  );
-
-  res.json({ message: "排序已更新" });
 });
 
 export default router;
