@@ -89,14 +89,23 @@ export const useActivities = (tripId: string | null | undefined) => {
   const reorderActivities = useCallback(
     async (orders: { id: string; sortOrder: number }[]) => {
       if (!tripId) return;
+      
+      // 1. 先呼叫後端 API 儲存新順序
       await activitiesApi.reorder(tripId, orders);
+      
+      // 2. 更新前端狀態：真實更新每個物件的 sortOrder 值，讓 UI 即時重新渲染
       setActivities((prev) => {
         const orderMap = new Map(orders.map((o) => [o.id, o.sortOrder]));
-        return [...prev].sort(
-          (a, b) =>
-            (orderMap.get(a.id) ?? a.sortOrder) -
-            (orderMap.get(b.id) ?? b.sortOrder)
-        );
+        
+        return prev.map((activity) => {
+          if (!activity.id) return activity;
+          const newOrder = orderMap.get(activity.id);
+          // 如果這個活動有在更新名單中，就賦予它新的 sortOrder 數字
+          if (newOrder !== undefined) {
+            return { ...activity, sortOrder: newOrder };
+          }
+          return activity;
+        });
       });
     },
     [tripId]
