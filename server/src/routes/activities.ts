@@ -64,9 +64,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   const { tripId } = req.params;
   const access = await checkTripAccess(tripId as string, req.userId!);
   
-  // 僅擁有者可以新增活動
-  if (access !== 'owner') {
-    res.status(403).json({ error: "僅行程擁有者可以新增活動" });
+  // 允許擁有者與被分享者新增活動
+  if (!access) {
+    res.status(403).json({ error: "您沒有權限在此行程新增活動" });
     return;
   }
 
@@ -102,9 +102,11 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  // 僅擁有者可以修改活動
-  if (activity.trip.userId !== req.userId) {
-    res.status(403).json({ error: "僅行程擁有者可以修改活動" });
+  const access = await checkTripAccess(activity.trip.id, req.userId!);
+  
+  // 允許擁有者與被分享者修改活動
+  if (!access) {
+    res.status(403).json({ error: "您沒有權限修改此活動" });
     return;
   }
 
@@ -132,7 +134,7 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
 router.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   const activity = await prisma.activity.findFirst({
     where: { id: req.params.id },
-    include: { trip: { select: { userId: true } } },
+    include: { trip: { select: { id: true, userId: true } } },
   });
 
   if (!activity) {
@@ -140,9 +142,11 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  // 僅擁有者可以刪除活動
-  if (activity.trip.userId !== req.userId) {
-    res.status(403).json({ error: "僅行程擁有者可以刪除活動" });
+  const access = await checkTripAccess(activity.trip.id, req.userId!);
+
+  // 允許擁有者與被分享者刪除活動
+  if (!access) {
+    res.status(403).json({ error: "您沒有權限刪除此活動" });
     return;
   }
 
@@ -155,9 +159,9 @@ router.patch("/reorder", requireAuth, async (req: AuthRequest, res: Response) =>
   const { tripId } = req.params;
   const access = await checkTripAccess(tripId as string, req.userId!);
   
-  // 僅擁有者可以重新排序
-  if (access !== 'owner') {
-    res.status(403).json({ error: "僅行程擁有者可以修改排序" });
+  // 允許擁有者與被分享者重新排序
+  if (!access) {
+    res.status(403).json({ error: "您沒有權限修改排序" });
     return;
   }
 
