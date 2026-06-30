@@ -1,8 +1,7 @@
 /**
  * PlaceSearch — Google Places autocomplete input component
  * Design: Coastal Morning theme
- * 
- * Features:
+ * * Features:
  * - Autocomplete suggestions
  * - Place selection with details
  * - Loading and error states
@@ -14,24 +13,29 @@ import { MapPin, Loader2, AlertCircle } from "lucide-react";
 import { useGooglePlaces, type PlaceResult, type AutocompleteResult } from "@/hooks/useGooglePlaces";
 
 interface PlaceSearchProps {
-  value: string;
-  onSelect: (place: PlaceResult) => void;
+  defaultValue?: string; // 【修改1】使用 defaultValue 來接收編輯時的舊資料
+  onPlaceSelect: (place: Partial<PlaceResult> & { name: string }) => void; // 配合 TripDetail 的命名
   placeholder?: string;
   className?: string;
 }
 
 export function PlaceSearch({
-  value,
-  onSelect,
+  defaultValue = "",
+  onPlaceSelect,
   placeholder = "搜尋地點...",
   className = "",
 }: PlaceSearchProps) {
-  const [input, setInput] = useState(value);
+  const [input, setInput] = useState(defaultValue);
   const [suggestions, setSuggestions] = useState<AutocompleteResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { searchPlaces, getPlaceDetails, isLoading, error } = useGooglePlaces();
+
+  // 【修改2】監聽 defaultValue 變化，確保編輯不同活動時能正確顯示舊地點
+  useEffect(() => {
+    setInput(defaultValue || "");
+  }, [defaultValue]);
 
   // Search places on input change
   useEffect(() => {
@@ -49,12 +53,26 @@ export function PlaceSearch({
     return () => clearTimeout(timer);
   }, [input, searchPlaces]);
 
+  // 【修改3】當使用者單純打字時，也即時把文字存回表單
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setInput(text);
+    
+    // 即時同步給外層 TripDetail，讓手打文字也能成功存進資料庫
+    onPlaceSelect({
+      name: text,
+      address: "",
+      lat: undefined,
+      lng: undefined
+    });
+  };
+
   const handleSelectPlace = async (suggestion: AutocompleteResult) => {
     setIsLoadingDetails(true);
     try {
       const details = await getPlaceDetails(suggestion.placeId);
       if (details) {
-        onSelect(details);
+        onPlaceSelect(details); // 傳遞完整的 Google 地圖資訊
         setInput(details.name);
         setShowSuggestions(false);
       }
@@ -82,7 +100,7 @@ export function PlaceSearch({
           ref={inputRef}
           type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleInputChange} // 改用新的 handleInputChange
           onFocus={() => input.trim().length > 2 && setShowSuggestions(true)}
           placeholder={placeholder}
           className="w-full pl-10 pr-10 border border-[oklch(0.88_0.008_220)] rounded-lg focus:border-[oklch(0.62_0.12_220)] focus:ring-1 focus:ring-[oklch(0.62_0.12_220)]/20 h-11 bg-white transition-all duration-150"
