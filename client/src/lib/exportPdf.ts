@@ -3,7 +3,8 @@
  * Generates a beautiful, printable travel guide
  */
 
-import jsPDF from "jspdf";
+// 【修正1】改用具名匯入 (Named Import)，解決 is not a constructor 錯誤
+import { jsPDF } from "jspdf"; 
 import html2canvas from "html2canvas";
 import { type Trip, type Activity } from "./api";
 import { format, parseISO } from "date-fns";
@@ -20,8 +21,15 @@ export async function exportTripToPdf(
   try {
     // Create a temporary container for rendering
     const container = document.createElement("div");
-    container.style.position = "absolute";
-    container.style.left = "-9999px";
+    
+    // 【修正2】使用 fixed 與透明度隱藏，避免 html2canvas 擷取出錯或偏移
+    container.style.position = "fixed";
+    container.style.top = "0";
+    container.style.left = "0";
+    container.style.zIndex = "-9999";
+    container.style.opacity = "0";
+    container.style.pointerEvents = "none";
+    
     container.style.width = "1200px";
     container.style.backgroundColor = "white";
     container.style.padding = "40px";
@@ -42,7 +50,7 @@ export async function exportTripToPdf(
           ${format(startDate, "yyyy年 M月 d日", { locale: zhTW })} - ${format(endDate, "yyyy年 M月 d日", { locale: zhTW })}
         </p>
         <p style="font-size: 14px; color: #999; margin: 5px 0;">
-          ${trip.destination} • ${dayCount} 天 • 預算: ${trip.budget?.toLocaleString()} ${trip.currency || "USD"}
+          ${trip.destination} • ${dayCount} 天 • 預算: ${trip.budget?.toLocaleString() || 0} ${trip.currency || "USD"}
         </p>
       </div>
 
@@ -66,7 +74,7 @@ export async function exportTripToPdf(
           ${dayActivities
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
             .map(
-              (activity, idx) => `
+              (activity) => `
             <div style="margin: 15px 0; padding: 15px; background-color: #f9fafb; border-left: 4px solid #0891b2; border-radius: 4px;">
               <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                 <h3 style="margin: 0; font-size: 16px; color: #1f2937;">${activity.title}</h3>
@@ -78,7 +86,7 @@ export async function exportTripToPdf(
               ${activity.time ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>時間:</strong> ${activity.time}</p>` : ""}
               ${activity.location ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>地點:</strong> ${activity.location}</p>` : ""}
               ${activity.address ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>地址:</strong> ${activity.address}</p>` : ""}
-              ${activity.duration ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>時長:</strong> ${activity.duration} 小時</p>` : ""}
+              ${activity.duration ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>時長:</strong> ${activity.duration} 分鐘</p>` : ""}
               ${activity.cost != null && activity.cost > 0 ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>費用:</strong> ${activity.cost.toLocaleString()} ${trip.currency || "TWD"}</p>` : ""}
               ${activity.notes ? `<p style="margin: 5px 0; font-size: 14px; color: #666;"><strong>備註:</strong> ${activity.notes}</p>` : ""}
             </div>
@@ -132,6 +140,7 @@ export async function exportTripToPdf(
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
+      windowWidth: 1200, // 強制指定虛擬視窗寬度
     });
 
     const imgWidth = 210; // A4 width in mm
@@ -143,12 +152,12 @@ export async function exportTripToPdf(
 
     // Add pages to PDF
     const imgData = canvas.toDataURL("image/png");
-    while (heightLeft >= 0) {
+    while (heightLeft > 0) {
       pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= 297; // A4 height in mm
       if (heightLeft > 0) {
         pdf.addPage();
-        position = heightLeft - imgHeight;
+        position -= 297; // 【修正3】多頁換頁時，Y軸位置應該是遞減的負數，才能正確印出下半部
       }
     }
 
@@ -159,6 +168,9 @@ export async function exportTripToPdf(
     document.body.removeChild(container);
   } catch (error) {
     console.error("Failed to export PDF:", error);
+    if (document.getElementById("pdf-container")) {
+      document.body.removeChild(document.getElementById("pdf-container")!);
+    }
     throw error;
   }
 }
