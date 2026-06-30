@@ -115,6 +115,7 @@ function ActivityDetailSheet({
   const handleOpenInGoogleMaps = () => {
     const query = activity.address || activity.location || activity.title;
     if (!query) return;
+    // 【修正】使用正確的 Google Maps 搜尋網址格式
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
   };
 
@@ -127,7 +128,7 @@ function ActivityDetailSheet({
               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${config.color}`}>
                 {config.label}
               </span>
-              <div className="flex items-center gap-4 mr-8"> {/* Increased gap and added margin to avoid X button */}
+              <div className="flex items-center gap-4 mr-8">
                 <Button variant="ghost" size="icon" onClick={onEdit} className="w-8 h-8 rounded-full hover:bg-gray-100">
                   <Edit3 className="w-4 h-4 text-gray-600" />
                 </Button>
@@ -995,12 +996,14 @@ export default function TripDetail() {
 
             <div className="space-y-1.5">
               <Label>地點搜尋</Label>
+              {/* 【修正】傳入 defaultValue */}
               <PlaceSearch 
+                defaultValue={form.location}
                 onPlaceSelect={(place) => {
                   setForm(prev => ({
                     ...prev,
                     location: place.name,
-                    address: place.address,
+                    address: place.address || "",
                     lat: place.lat,
                     lng: place.lng
                   }));
