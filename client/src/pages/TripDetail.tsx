@@ -845,7 +845,7 @@ export default function TripDetail() {
               <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">預算分佈</div>
               <div className="text-xs text-gray-400 font-medium">依類別統計</div>
             </div>
-            <div className="h-12 w-12">
+           <div className="h-20 w-36 -mr-4"> 
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -854,11 +854,38 @@ export default function TripDetail() {
                     outerRadius={24}
                     paddingAngle={2}
                     dataKey="value"
+                    labelLine={false} // 隱藏預設的長引線
+                    label={({ cx, cy, midAngle, outerRadius, name }) => {
+                      if (name === 'Empty') return null; // 空資料時不顯示文字
+                      
+                      // 計算文字在外側的位置 (外半徑 + 12px)
+                      const radius = outerRadius + 12;
+                      const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+                      const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+                      
+                      return (
+                        <text 
+                          x={x} 
+                          y={y} 
+                          fill="#64748b" 
+                          textAnchor={x > cx ? 'start' : 'end'} // 自動根據左右側對齊
+                          dominantBaseline="central" 
+                          fontSize={11} 
+                          fontWeight="bold"
+                        >
+                          {name}
+                        </text>
+                      );
+                    }}
                   >
                     {(costByCategory.length > 0 ? costByCategory : [{ color: '#f3f4f6' }]).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
+                  <Tooltip 
+                    formatter={(value: number) => [`${value.toLocaleString()} ${trip?.currency || ''}`, '總計']}
+                    contentStyle={{ borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>

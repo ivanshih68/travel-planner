@@ -22,12 +22,15 @@ import {
   Camera,
   ImagePlus,
   Copy, // 新增圖示
+  MoreHorizontal,
+  Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { zhTW } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,6 +78,7 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState<"all" | "planning" | "ongoing" | "completed">("all");
   const [showNewTrip, setShowNewTrip] = useState(false);
   const [deletingTrip, setDeletingTrip] = useState<Trip | null>(null);
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [mobileTab, setMobileTab] = useState<"trips" | "profile">("trips");
 
@@ -159,6 +163,58 @@ export default function Dashboard() {
     }
   };
 
+// 開啟編輯視窗並載入資料
+  const openEditTrip = (trip: Trip) => {
+    setEditingTrip(trip);
+
+    // 關鍵：將日期轉換為 YYYY-MM-DD 格式
+    const formatDate = (dateString: string) => {
+      if (!dateString) return "";
+      // 如果日期格式是完整 ISO 字串，只取前 10 個字元 (YYYY-MM-DD)
+      return new Date(dateString).toISOString().split('T')[0];
+    };
+
+    setForm({
+      title: trip.title,
+      destination: trip.destination,
+      startDate: formatDate(trip.startDate), // 經過格式化
+      endDate: formatDate(trip.endDate),     // 經過格式化
+      description: trip.description || "",
+      budget: trip.budget?.toString() || "",
+      currency: trip.currency || "TWD",
+      status: trip.status.toUpperCase() as any,
+    });
+  };
+  // 儲存編輯結果
+  const handleUpdateTrip = async () => {
+    if (!editingTrip?.id || !form.title || !form.destination || !form.startDate || !form.endDate) {
+      toast.error("請填寫所有必填欄位");
+      return;
+    }
+    
+    setIsCreating(true);
+    try {
+      await tripsApi.update(editingTrip.id, {
+        title: form.title,
+        destination: form.destination,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        description: form.description,
+        budget: form.budget ? parseFloat(form.budget) : undefined,
+        currency: form.currency,
+        status: form.status.toUpperCase(),
+      });
+      
+      toast.success("行程更新成功！");
+      setEditingTrip(null);
+      window.location.reload(); 
+    } catch (error) {
+      toast.error("更新失敗，請稍後再試");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+  
   const handleDeleteTrip = async () => {
     if (!deletingTrip?.id) return;
     try {
@@ -294,8 +350,9 @@ export default function Dashboard() {
                   trip={trip} 
                   fallbackImage={CARD_IMAGES[index % CARD_IMAGES.length]} 
                   onOpen={() => setLocation(`/trip/${trip.id}`)} 
+                  onEdit={() => openEditTrip(trip)}
                   onDelete={() => setDeletingTrip(trip)} 
-                  onUploadCover={handleUploadCover} 
+                  onUploadCover={handleUploadCover}
                 />
               ))}
             </div>
@@ -355,12 +412,45 @@ export default function Dashboard() {
       <Dialog open={showNewTrip} onOpenChange={setShowNewTrip}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogTitle>建立新行程</DialogTitle>
+         <div className="grid gap-4 py-4">
+   <Input placeholder="標題" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+   <Input placeholder="目的地" value={form.destination} onChange={e => setForm({...form, destination: e.target.value})} />
+   {/* 補上日期欄位 */}
+   <div className="grid grid-cols-2 gap-4">
+      <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} />
+      <Input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} />
+   </div>
+</div>
+          <DialogFooter>
+            <Button onClick={handleCreateTrip}>建立</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== 這是你剛剛加的編輯行程 Dialog (貼在它下方) ===== */}
+      <Dialog open={!!editingTrip} onOpenChange={(open) => !open && setEditingTrip(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogTitle>編輯行程資訊</DialogTitle>
           <div className="grid gap-4 py-4">
              <Input placeholder="標題" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
              <Input placeholder="目的地" value={form.destination} onChange={e => setForm({...form, destination: e.target.value})} />
+             <div className="grid grid-cols-2 gap-4">
+                <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} />
+                <Input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} />
+             </div>
+             <div className="flex gap-2">
+                <Input type="number" placeholder="總預算 (選填)" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} />
+                <Select value={form.currency} onValueChange={(val) => setForm({ ...form, currency: val })}>
+                  <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleCreateTrip}>建立</Button>
+            <Button variant="outline" onClick={() => setEditingTrip(null)}>取消</Button>
+            <Button onClick={handleUpdateTrip} disabled={isCreating} className="bg-[oklch(0.22_0.08_220)] text-white">
+              {isCreating ? "儲存中..." : "儲存變更"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -368,19 +458,42 @@ export default function Dashboard() {
   );
 }
 
-// 原始 TripCard 組件
-function TripCard({ trip, fallbackImage, onOpen, onDelete, onUploadCover }: any) {
+// 替換後的 TripCard 組件
+function TripCard({ trip, fallbackImage, onOpen, onEdit, onDelete, onUploadCover }: any) {
   return (
-    <div className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg transition-all cursor-pointer" onClick={onOpen}>
+    <div className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg transition-all cursor-pointer relative" onClick={onOpen}>
+      
+      {/* 封面圖片 */}
       <div className="relative h-44 overflow-hidden">
         <img src={trip.coverImage || fallbackImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
       </div>
+
+      {/* 右上角操作選單 (滑鼠移過去才會顯示) */}
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button 
+              onClick={(e) => e.stopPropagation()} 
+              className="p-2 bg-white/80 backdrop-blur-sm rounded-full hover:bg-white text-gray-700 shadow-sm transition-colors"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32 rounded-xl">
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }} className="cursor-pointer gap-2">
+              <Edit3 className="w-4 h-4" /> 編輯
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="cursor-pointer text-red-600 gap-2 focus:text-red-600 focus:bg-red-50">
+              <Trash2 className="w-4 h-4" /> 刪除
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* 卡片文字內容 */}
       <div className="p-4">
         <h3 className="font-bold text-lg truncate">{trip.title}</h3>
-        <p className="text-sm text-gray-500">{trip.destination}</p>
-        <Button variant="ghost" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="mt-2 w-full text-red-500">
-          <Trash2 className="w-4 h-4 mr-2" /> 刪除
-        </Button>
+        <p className="text-sm text-gray-500 truncate">{trip.destination}</p>
       </div>
     </div>
   );
