@@ -74,12 +74,38 @@ export default function Dashboard() {
   }, []);
 
   const filteredTrips = trips.filter((t) => activeFilter === "all" || t.status === activeFilter.toUpperCase());
+  const stats = { total: trips.length, planning: trips.filter((t) => t.status === "PLANNING").length, ongoing: trips.filter((t) => t.status === "ONGOING").length, completed: trips.filter((t) => t.status === "COMPLETED").length };
 
   return (
     <div className="min-h-screen bg-[oklch(0.97_0.015_80)] flex">
-      <main className="flex-1 p-8">
-        <h1 className="text-2xl font-bold mb-6">我的行程</h1>
-        
+      {/* Sidebar */}
+      <aside className="hidden lg:flex flex-col w-64 bg-[oklch(0.22_0.08_220)] text-white fixed h-full z-20">
+        <div className="p-6 border-b border-white/10 flex items-center gap-3">
+          <img src={LOGO_URL} alt="Voyager" className="w-8 h-8 brightness-0 invert" />
+          <span className="font-['Playfair_Display'] text-xl font-bold">Voyager</span>
+        </div>
+        <div className="p-4 border-b border-white/10">
+           <p className="text-xs text-white/40 uppercase tracking-widest mb-3">旅程統計</p>
+           <div className="grid grid-cols-2 gap-2">
+              {[{label:"全部", val:stats.total, f:"all"}, {label:"規劃", val:stats.planning, f:"planning"}].map(s => (
+                <button key={s.f} onClick={() => setActiveFilter(s.f as any)} className="bg-white/5 p-2 rounded-lg text-left">
+                  <p className="text-lg font-bold">{s.val}</p>
+                  <p className="text-xs text-white/60">{s.label}</p>
+                </button>
+              ))}
+           </div>
+        </div>
+        <nav className="flex-1 p-4">
+          <Button onClick={() => setShowNewTrip(true)} className="w-full bg-[oklch(0.72_0.14_35)]">新增行程</Button>
+        </nav>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 lg:ml-64 p-4 lg:p-8">
+        <header className="mb-8">
+            <h1 className="text-2xl font-bold text-[oklch(0.22_0.08_220)]">我的行程</h1>
+        </header>
+
         {loading ? <Skeleton className="h-72 w-full" /> : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredTrips.map((trip, index) => (
@@ -94,7 +120,7 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold mb-4">分享行程</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {sharedTrips.map((trip, index) => (
-                <div key={trip.id} className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg transition-all">
+                <motion.div key={trip.id} className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg transition-all">
                   <div className="relative h-44 overflow-hidden cursor-pointer" onClick={() => setLocation(`/trip/${trip.id}`)}>
                     <img src={trip.coverImage || CARD_IMAGES[index % CARD_IMAGES.length]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   </div>
@@ -107,7 +133,7 @@ export default function Dashboard() {
                       <Copy className="w-4 h-4 mr-2" /> 複製行程
                     </Button>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -129,12 +155,10 @@ export default function Dashboard() {
   );
 }
 
-// 獨立的 TripCard 元件
+// TripCard Component
 function TripCard({ trip, fallbackImage, onOpen, onDelete, onUploadCover }: any) {
   const status = statusConfig[trip.status] || statusConfig.PLANNING;
   const StatusIcon = status.icon;
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   return (
     <div className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg transition-all cursor-pointer" onClick={onOpen}>
       <div className="relative h-44 overflow-hidden">
