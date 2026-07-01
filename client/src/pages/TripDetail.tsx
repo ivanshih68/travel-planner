@@ -452,9 +452,8 @@ export default function TripDetail() {
     return [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [currentDayActivities]);
 
-  const totalCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
-  const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
-
+  const totalCost = activities.reduce((sum, a) => sum + Number(a.cost || 0), 0);
+  const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + Number(a.cost || 0), 0);
   // Move Activity Up/Down
   const handleMoveActivity = async (index: number, direction: 'up' | 'down') => {
     if (!tripId) return;
@@ -520,7 +519,7 @@ export default function TripDetail() {
     return Object.entries(categoryConfig)
       .map(([key, cfg]) => ({
         name: cfg.label,
-        value: activities.filter((a) => a.category === key.toUpperCase()).reduce((s, a) => s + (a.cost || 0), 0),
+        value: activities.filter((a) => a.category === key.toUpperCase()).reduce((s, a) => s + Number(a.cost || 0), 0),
         color: PIE_COLORS[key],
       }))
       .filter((d) => d.value > 0);
