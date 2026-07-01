@@ -880,12 +880,22 @@ export default function TripDetail() {
                   </span>
                 </h2>
               </div>
-              <Button 
-                onClick={openAddActivity}
-                className="hidden lg:flex rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"
-              >
-                <Plus className="w-4 h-4 mr-2" /> 新增活動
-              </Button>
+              {/* 修改處：將原本的一個按鈕改為 flex-col 容器，並加入備案按鈕 */}
+              <div className="hidden lg:flex flex-col gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => toast.info("備案功能開發中...")} // 先暫時不實作功能
+                  className="rounded-full border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)] hover:bg-gray-50"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> 新增備案
+                </Button>
+                <Button 
+                  onClick={openAddActivity}
+                  className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> 新增活動
+                </Button>
+              </div>
             </div>
 
             {loading ? (

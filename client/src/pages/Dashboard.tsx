@@ -261,9 +261,26 @@ export default function Dashboard() {
           </button>
         </div>
       </aside>
-
+{/* ===== 手機版底部導航欄 (新增這一段) ===== */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 flex py-2 px-4 shadow-lg">
+        <button 
+          onClick={() => setMobileTab("trips")} 
+          className={`flex-1 flex flex-col items-center gap-1 ${mobileTab === "trips" ? "text-[oklch(0.22_0.08_220)]" : "text-gray-400"}`}
+        >
+          <Compass className="w-5 h-5" />
+          <span className="text-[10px] font-bold">行程</span>
+        </button>
+        <button 
+          onClick={() => { logout(); setLocation("/auth"); }} 
+          className="flex-1 flex flex-col items-center gap-1 text-red-500"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="text-[10px] font-bold">登出</span>
+        </button>
+      </nav>
+      
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 min-h-screen">
+      <main className="flex-1 lg:ml-64 min-h-screen pb-20"> {/* 增加 pb-20 確保手機版不被導航遮擋 */}
         <header className="hidden lg:flex items-center justify-between px-8 py-5 bg-white/80 backdrop-blur-sm border-b border-[oklch(0.92_0.008_220)] sticky top-0 z-10">
            <h1 className="font-['Playfair_Display'] text-2xl font-bold text-[oklch(0.22_0.08_220)]">所有行程</h1>
         </header>
@@ -272,10 +289,18 @@ export default function Dashboard() {
            {loading ? <Skeleton className="h-72 w-full" /> : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
               {filteredTrips.map((trip, index) => (
-                <TripCard key={trip.id} trip={trip} fallbackImage={CARD_IMAGES[index % CARD_IMAGES.length]} onOpen={() => setLocation(`/trip/${trip.id}`)} onDelete={() => setDeletingTrip(trip)} onUploadCover={handleUploadCover} />
+                <TripCard 
+                  key={trip.id} 
+                  trip={trip} 
+                  fallbackImage={CARD_IMAGES[index % CARD_IMAGES.length]} 
+                  onOpen={() => setLocation(`/trip/${trip.id}`)} 
+                  onDelete={() => setDeletingTrip(trip)} 
+                  onUploadCover={handleUploadCover} 
+                />
               ))}
             </div>
           )}
+          {/* ... 後續的 Shared Trips 邏輯保持不變 ... */}
 
           {/* Shared Trips Section */}
           {(sharedLoading || sharedTrips.length > 0) && (
