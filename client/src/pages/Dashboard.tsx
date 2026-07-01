@@ -483,5 +483,3 @@ function TripCard({ trip, fallbackImage, onOpen, onEdit, onDelete, onUploadCover
     </div>
   );
 }
-  );
-}
