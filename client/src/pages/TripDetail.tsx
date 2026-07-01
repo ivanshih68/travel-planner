@@ -509,20 +509,29 @@ export default function TripDetail() {
 
   // ── Cost breakdown by category (all days) ───────────────────────────────
   const costByCategory = useMemo(() => {
+    // 定義各類別的專屬顏色
     const PIE_COLORS: Record<string, string> = {
-      attraction: "oklch(0.62 0.12 220)",
-      restaurant: "oklch(0.72 0.14 35)",
-      hotel: "oklch(0.62 0.10 300)",
-      transport: "oklch(0.55 0.14 145)",
-      other: "oklch(0.60 0.03 220)",
+      ATTRACTION: "#3b82f6", // 藍色
+      RESTAURANT: "#f97316", // 橘色
+      HOTEL: "#a855f7",      // 紫色
+      TRANSPORT: "#22c55e",  // 綠色
+      OTHER: "#94a3b8",      // 灰色
     };
+
     return Object.entries(categoryConfig)
-      .map(([key, cfg]) => ({
-        name: cfg.label,
-        value: activities.filter((a) => a.category === key.toUpperCase()).reduce((s, a) => s + Number(a.cost || 0), 0),
-        color: PIE_COLORS[key],
-      }))
-      .filter((d) => d.value > 0);
+      .map(([key, cfg]) => {
+        // 【關鍵修復】將所有 cost 強制轉為 Number，確保運算正確
+        const total = activities
+          .filter((a) => a.category === key)
+          .reduce((sum, a) => sum + Number(a.cost || 0), 0);
+        
+        return {
+          name: cfg.label,
+          value: total,
+          color: PIE_COLORS[key] || "#94a3b8", // 對應上面定義的顏色
+        };
+      })
+      .filter((d) => d.value > 0); // 只顯示有花費的類別
   }, [activities]);
 
   const openAddActivity = () => {
