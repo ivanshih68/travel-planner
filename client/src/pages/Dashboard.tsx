@@ -166,18 +166,25 @@ export default function Dashboard() {
 // 開啟編輯視窗並載入資料
   const openEditTrip = (trip: Trip) => {
     setEditingTrip(trip);
+
+    // 關鍵：將日期轉換為 YYYY-MM-DD 格式
+    const formatDate = (dateString: string) => {
+      if (!dateString) return "";
+      // 如果日期格式是完整 ISO 字串，只取前 10 個字元 (YYYY-MM-DD)
+      return new Date(dateString).toISOString().split('T')[0];
+    };
+
     setForm({
       title: trip.title,
       destination: trip.destination,
-      startDate: trip.startDate,
-      endDate: trip.endDate,
+      startDate: formatDate(trip.startDate), // 經過格式化
+      endDate: formatDate(trip.endDate),     // 經過格式化
       description: trip.description || "",
       budget: trip.budget?.toString() || "",
       currency: trip.currency || "TWD",
-      status: trip.status.toUpperCase() as any, 
+      status: trip.status.toUpperCase() as any,
     });
   };
-
   // 儲存編輯結果
   const handleUpdateTrip = async () => {
     if (!editingTrip?.id || !form.title || !form.destination || !form.startDate || !form.endDate) {
