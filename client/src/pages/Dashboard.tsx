@@ -412,10 +412,15 @@ export default function Dashboard() {
       <Dialog open={showNewTrip} onOpenChange={setShowNewTrip}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogTitle>建立新行程</DialogTitle>
-          <div className="grid gap-4 py-4">
-             <Input placeholder="標題" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
-             <Input placeholder="目的地" value={form.destination} onChange={e => setForm({...form, destination: e.target.value})} />
-          </div>
+         <div className="grid gap-4 py-4">
+   <Input placeholder="標題" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+   <Input placeholder="目的地" value={form.destination} onChange={e => setForm({...form, destination: e.target.value})} />
+   {/* 補上日期欄位 */}
+   <div className="grid grid-cols-2 gap-4">
+      <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} />
+      <Input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} />
+   </div>
+</div>
           <DialogFooter>
             <Button onClick={handleCreateTrip}>建立</Button>
           </DialogFooter>
