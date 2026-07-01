@@ -148,6 +148,9 @@ export const tripsApi = {
 
   getShared: (token: string) =>
     api.get<{ trip: Trip & { activities: Activity[] } }>(`/api/trips/shared/${token}`),
+
+  // ✅ 新增：複製行程 API
+  copy: (id: string) => api.post<{ trip: Trip }>(`/api/trips/${id}/copy`),
 };
 
 // ── Activities API ────────────────────────────────────────
