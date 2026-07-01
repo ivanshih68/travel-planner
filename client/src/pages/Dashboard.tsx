@@ -340,9 +340,9 @@ export default function Dashboard() {
                   trip={trip} 
                   fallbackImage={CARD_IMAGES[index % CARD_IMAGES.length]} 
                   onOpen={() => setLocation(`/trip/${trip.id}`)} 
-                  onEdit={() => openEditTrip(trip)}  {/* <- 加上這個編輯功能 */}
+                  onEdit={() => openEditTrip(trip)}
                   onDelete={() => setDeletingTrip(trip)} 
-                  onUploadCover={handleUploadCover}  {/* <- 記得把這個保留下來 */}
+                  onUploadCover={handleUploadCover}
                 />
               ))}
             </div>
