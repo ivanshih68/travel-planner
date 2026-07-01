@@ -279,37 +279,84 @@ export default function Dashboard() {
              </div>
            )}
 
-          {/* Shared Trips Section */}
-          {(sharedLoading || sharedTrips.length > 0) && (
-            <div className="mt-10">
-              <h2 className="text-xl font-bold mb-4">分享行程</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-                {sharedTrips.map((trip, index) => (
-                  <div key={trip.id} className="relative group cursor-pointer bg-white rounded-2xl p-4 border border-[oklch(0.92_0.008_220)] hover:shadow-md transition-shadow">
-                     <div onClick={() => setLocation(`/trip/${trip.id}`)}>
-                        <h3 className="font-bold text-lg">{trip.title}</h3>
-                        <p className="text-sm text-gray-500">{trip.destination}</p>
-                     </div>
-                     {/* 複製按鈕 */}
-                     <Button 
-                       size="sm" 
-                       variant="secondary" 
-                       className="mt-3 w-full rounded-xl"
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         setSelectedTripToCopy(trip);
-                         setShowCopyDialog(true);
-                       }}
-                     >
-                       <Copy className="w-4 h-4 mr-2" /> 複製行程
-                     </Button>
-                  </div>
-                ))}
+         {/* Shared Trips Section */}
+{(sharedLoading || sharedTrips.length > 0) && (
+  <div className="mt-10">
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-8 h-8 rounded-lg bg-[oklch(0.72_0.14_35)]/15 flex items-center justify-center">
+        <Globe className="w-4 h-4 text-[oklch(0.62_0.14_35)]" />
+      </div>
+      <div>
+        <h2 className="font-['Playfair_Display'] text-xl font-bold text-[oklch(0.22_0.08_220)]">分享行程</h2>
+        <p className="text-xs text-[oklch(0.55_0.05_220)]">其他人分享給你的行程</p>
+      </div>
+    </div>
+    
+    {sharedLoading ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+        {[1, 2].map((i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
+      </div>
+    ) : (
+      <motion.div
+        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6"
+        initial="hidden"
+        animate="visible"
+        variants={{ visible: { transition: { staggerChildren: 0.06 } }, hidden: {} }}
+      >
+        {sharedTrips.map((trip, index) => (
+          <motion.div
+            key={trip.id}
+            variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.23, 1, 0.32, 1] } } }}
+            className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer"
+          >
+            {/* 這裡加入封面圖 */}
+            <div className="relative h-44 overflow-hidden" onClick={() => setLocation(`/trip/${trip.id}`)}>
+              <img
+                src={trip.coverImage || CARD_IMAGES[index % CARD_IMAGES.length]}
+                alt={trip.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              <div className="absolute top-3 left-3 bg-[oklch(0.72_0.14_35)] text-white text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+                <Globe className="w-3 h-3" /> 分享
               </div>
             </div>
-          )}
-        </div>
-      </main>
+
+            {/* 卡片文字資訊 */}
+            <div className="p-4" onClick={() => setLocation(`/trip/${trip.id}`)}>
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-['Playfair_Display'] font-bold text-[oklch(0.22_0.08_220)] text-lg leading-tight truncate">
+                  {trip.title}
+                </h3>
+                <ChevronRight className="w-4 h-4 text-[oklch(0.72_0.05_220)] flex-shrink-0 mt-1" />
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-sm text-[oklch(0.52_0.05_220)]">
+                <MapPin className="w-3.5 h-3.5" />
+                <span className="truncate">{trip.destination}</span>
+              </div>
+            </div>
+
+            {/* 複製按鈕 */}
+            <div className="px-4 pb-4">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                className="w-full rounded-xl bg-[oklch(0.95_0.005_220)] hover:bg-[oklch(0.90_0.01_220)] text-[oklch(0.22_0.08_220)]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTripToCopy(trip);
+                  setShowCopyDialog(true);
+                }}
+              >
+                <Copy className="w-4 h-4 mr-2" /> 複製行程
+              </Button>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+    )}
+  </div>
+)}
 
       {/* ===== Dialogs ===== */}
       <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
