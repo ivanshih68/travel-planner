@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 /**
  * 根據目的地抓取 Unsplash 風景圖
  */
@@ -12,18 +10,13 @@ export async function fetchUnsplashCoverImage(destination: string): Promise<stri
     }
 
     // 優化關鍵字：目的地 + 旅遊風景
-    const query = `${destination} travel scenery landscape`;
+    const query = encodeURIComponent(`${destination} travel scenery landscape`);
+    const url = `https://api.unsplash.com/search/photos?query=${query}&per_page=1&orientation=landscape&client_id=${accessKey}`;
     
-    const response = await axios.get('https://api.unsplash.com/search/photos', {
-      params: {
-        query,
-        per_page: 1,
-        orientation: 'landscape',
-        client_id: accessKey,
-      },
-    });
+    const response = await fetch(url);
+    const data = await response.json();
 
-    const imageUrl = response.data.results?.[0]?.urls?.regular;
+    const imageUrl = data.results?.[0]?.urls?.regular;
     
     if (imageUrl) {
       console.log(`[Unsplash] 成功為 ${destination} 抓取圖片: ${imageUrl}`);
@@ -33,7 +26,7 @@ export async function fetchUnsplashCoverImage(destination: string): Promise<stri
     console.log(`[Unsplash] 找不到符合 ${destination} 的圖片`);
     return null;
   } catch (error: any) {
-    console.error('[Unsplash] 抓取圖片發生錯誤:', error.response?.data || error.message);
+    console.error('[Unsplash] 抓取圖片發生錯誤:', error.message);
     return null;
   }
 }
