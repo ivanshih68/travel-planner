@@ -130,6 +130,29 @@ export default function Dashboard() {
     completed: trips.filter((t) => t.status === "COMPLETED").length,
   };
 
+// 透過目的地名稱去 Unsplash 抓取圖片
+  const fetchCoverImage = async (query: string): Promise<string | null> => {
+    try {
+      const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
+      if (!accessKey) {
+        console.warn("尚未設定 VITE_UNSPLASH_ACCESS_KEY");
+        return null;
+      }
+
+      // 呼叫 Unsplash Search API，限定 1 張且為橫向圖片
+      const res = await fetch(
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&client_id=${accessKey}`
+      );
+      const data = await res.json();
+      
+      // 回傳圖片的常規大小網址
+      return data.results?.[0]?.urls?.regular || null;
+    } catch (error) {
+      console.error("抓取封面圖片失敗:", error);
+      return null;
+    }
+  };
+  
   const handleCreateTrip = async () => {
     if (!form.title || !form.destination || !form.startDate || !form.endDate) {
       toast.error("請填寫所有必填欄位");
@@ -139,6 +162,10 @@ export default function Dashboard() {
 
     setIsCreating(true);
     try {
+      // 1. 呼叫我們剛剛寫的函式，去 Unsplash 抓圖
+      const imageUrl = await fetchCoverImage(form.destination);
+
+      // 2. 建立行程時，把 imageUrl 一起送出
       await createTrip({
         title: form.title,
         destination: form.destination,
@@ -148,7 +175,9 @@ export default function Dashboard() {
         budget: form.budget ? parseFloat(form.budget) : undefined,
         currency: form.currency,
         status: form.status.toUpperCase(),
+        coverImage: imageUrl || undefined, // <-- 加上這一行！
       });
+      
       toast.success("行程建立成功！開始規劃你的旅程 ✈️");
       setShowNewTrip(false);
       setForm({ title: "", destination: "", startDate: "", endDate: "", description: "", budget: "", currency: "TWD", status: "planning" });

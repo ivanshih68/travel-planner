@@ -115,6 +115,7 @@ export const tripsApi = {
     budget?: number;
     currency?: string;
     status?: string;
+    coverImage?: string; // ✅ 這裡已經幫你補上囉！
   }) => api.post<{ trip: Trip }>("/api/trips", data),
 
   get: (id: string) => api.get<{ trip: Trip }>(`/api/trips/${id}`),
