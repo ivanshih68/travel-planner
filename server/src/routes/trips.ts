@@ -126,7 +126,7 @@ router.post("/:id/copy", requireAuth, async (req: AuthRequest, res: Response) =>
 
   // 2. 執行複製 (Transaction)
   try {
-    const newTrip = await prisma.$transaction(async (tx) => {
+    const newTrip = await prisma.$transaction(async (tx: any) => {
       const createdTrip = await tx.trip.create({
         data: {
           title: `${originalTrip.title} (複製)`,
@@ -142,7 +142,7 @@ router.post("/:id/copy", requireAuth, async (req: AuthRequest, res: Response) =>
 
       if (originalTrip.activities.length > 0) {
         await tx.activity.createMany({
-          data: originalTrip.activities.map((act) => ({
+          data: originalTrip.activities.map((act: any) => ({
             tripId: createdTrip.id,
             title: act.title,
             category: act.category,
