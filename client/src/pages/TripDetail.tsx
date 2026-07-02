@@ -115,27 +115,34 @@ function ActivityDetailSheet({
   const handleOpenInGoogleMaps = () => {
     const query = activity.address || activity.location || activity.title;
     if (!query) return;
-    // 【修正】使用正確的 Google Maps 搜尋網址格式
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
   };
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-md bg-white overflow-y-auto p-0">
-        <div className="p-6">
-          <SheetHeader className="mb-6 relative">
-            <div className="flex items-center justify-between mb-4">
-              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${config.color}`}>
+      <SheetContent 
+        side="bottom" 
+        className="h-[90dvh] sm:max-w-md mx-auto rounded-t-[32px] bg-white overflow-hidden p-0 border-none flex flex-col [&>button]:hidden"
+      >
+        {/* Drag Handle Area with Motion */}
+        <motion.div 
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.5 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 100) onClose();
+          }}
+          className="w-full flex justify-center pt-3 pb-4 cursor-grab active:cursor-grabbing touch-none"
+        >
+          <div className="w-12 h-1.5 rounded-full bg-gray-200" />
+        </motion.div>
+
+        <div className="flex-1 overflow-y-auto px-6 pb-32">
+          <SheetHeader className="mb-6">
+            <div className="flex items-center mb-4">
+              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
                 {config.label}
               </span>
-              <div className="flex items-center gap-4 mr-8">
-                <Button variant="ghost" size="icon" onClick={onEdit} className="w-8 h-8 rounded-full hover:bg-gray-100">
-                  <Edit3 className="w-4 h-4 text-gray-600" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onDelete} className="w-8 h-8 rounded-full hover:bg-red-50 text-red-500">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
             </div>
             <SheetTitle className="text-3xl font-black text-[oklch(0.22_0.08_220)] text-left leading-tight">
               {activity.title}
@@ -144,7 +151,7 @@ function ActivityDetailSheet({
 
           <div className="space-y-8">
             {/* Time and Stats */}
-            <div className="flex flex-wrap gap-6">
+            <div className="flex flex-wrap gap-8">
               <div className="space-y-1">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">時間</div>
                 <div className="flex items-center gap-2 font-bold text-[oklch(0.22_0.08_220)]">
@@ -220,6 +227,25 @@ function ActivityDetailSheet({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Bottom Toolbar */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-4">
+          <Button 
+            onClick={onEdit}
+            className="flex-1 h-12 rounded-xl bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.12_220)] text-white font-bold flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all"
+          >
+            <Edit3 className="w-5 h-5" />
+            編輯
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={onDelete}
+            className="flex-1 h-12 rounded-xl border-2 border-red-100 text-red-500 hover:bg-red-50 font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          >
+            <Trash2 className="w-5 h-5" />
+            刪除
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
