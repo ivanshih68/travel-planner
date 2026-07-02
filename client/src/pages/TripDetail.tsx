@@ -120,14 +120,25 @@ function ActivityDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[90vh] sm:max-w-md mx-auto rounded-t-[32px] bg-white overflow-hidden p-0 border-none flex flex-col [&>button]:hidden">
-        {/* Drag Handle */}
-        <div className="w-full flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing">
+      <SheetContent 
+        side="bottom" 
+        className="h-[90dvh] sm:max-w-md mx-auto rounded-t-[32px] bg-white overflow-hidden p-0 border-none flex flex-col [&>button]:hidden"
+      >
+        {/* Drag Handle Area with Motion */}
+        <motion.div 
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.5 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 100) onClose();
+          }}
+          className="w-full flex justify-center pt-3 pb-4 cursor-grab active:cursor-grabbing touch-none"
+        >
           <div className="w-12 h-1.5 rounded-full bg-gray-200" />
-        </div>
+        </motion.div>
 
         <div className="flex-1 overflow-y-auto px-6 pb-32">
-          <SheetHeader className="mb-6 pt-2">
+          <SheetHeader className="mb-6">
             <div className="flex items-center mb-4">
               <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
                 {config.label}
