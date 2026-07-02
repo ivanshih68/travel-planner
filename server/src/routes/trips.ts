@@ -5,6 +5,7 @@ import multer from "multer";
 import { prisma } from "../lib/prisma";
 import { uploadCoverImage } from "../lib/cloudinary";
 import { requireAuth, AuthRequest } from "../middleware/auth";
+import { fetchUnsplashCoverImage, DEFAULT_TRIP_COVER } from "../lib/unsplash";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -179,7 +180,21 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { startDate, endDate, budget, ...rest } = parsed.data;
+  const { startDate, endDate, budget, coverImage, ...rest } = parsed.data;
+
+  // --- 自動抓取 Unsplash 圖片邏輯 ---
+  let finalCoverImage = coverImage;
+  if (!finalCoverImage) {
+    try {
+      const fetchedImage = await fetchUnsplashCoverImage(rest.destination);
+      finalCoverImage = fetchedImage || DEFAULT_TRIP_COVER;
+    } catch (error) {
+      console.error("Auto fetch cover image failed:", error);
+      finalCoverImage = DEFAULT_TRIP_COVER;
+    }
+  }
+  // ----------------------------
+
   const trip = await prisma.trip.create({
     data: {
       ...rest,
@@ -187,6 +202,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       budget: budget ?? null,
+      coverImage: finalCoverImage,
     },
   });
   res.status(201).json({ trip });
