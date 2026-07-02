@@ -19,6 +19,7 @@ const tripSchema = z.object({
   budget: z.number().positive().optional().nullable(),
   currency: z.string().length(3).default("TWD"),
   status: z.enum(["PLANNING", "ONGOING", "COMPLETED"]).default("PLANNING"),
+  coverImage: z.string().optional().nullable(), // ✅ 補上這一行！讓 Zod 認識它
 });
 
 // ── GET /api/trips ───────────────────────────────────────
