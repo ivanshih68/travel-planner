@@ -512,12 +512,22 @@ export default function TripDetail() {
     activities.forEach(a => {
       stats[a.category] = (stats[a.category] || 0) + Number(a.cost || 0);
     });
+
+    // Define explicit colors for the chart to match the category theme
+    const categoryColors: Record<string, string> = {
+      ATTRACTION: "#3b82f6", // blue-500
+      RESTAURANT: "#f97316", // orange-500
+      HOTEL: "#a855f7",      // purple-500
+      TRANSPORT: "#22c55e",   // green-500
+      OTHER: "#94a3b8",      // gray-400
+    };
+
     return Object.entries(stats).map(([cat, val]) => ({
       name: categoryConfig[cat]?.label || cat,
       value: val,
-      color: categoryConfig[cat]?.dot.replace('bg-', '#').replace('500', '') || '#94a3b8'
+      color: categoryColors[cat] || "#94a3b8"
     })).filter(s => s.value > 0);
-  }, [activities]);
+  }, [activities, activitiesByDay]);
 
   const handleMoveActivity = async (index: number, direction: 'up' | 'down') => {
     if (!tripId) return;
