@@ -281,7 +281,7 @@ function ActivityCard({
 
   return (
     <>
-    <div className="group relative flex gap-4 items-start">
+    <div className="group relative flex gap-4 items-start w-full min-w-0">
       {/* Time column */}
       <div className="w-12 pt-1 flex flex-col items-center">
         <span className="text-xs font-bold text-[oklch(0.45_0.05_220)]">
@@ -293,7 +293,7 @@ function ActivityCard({
       {/* Content card */}
       <div 
         onClick={() => setShowDetail(true)}
-        className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4 cursor-pointer"
+        className="flex-1 min-w-0 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4 cursor-pointer"
       >
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex justify-between items-start mb-2">
