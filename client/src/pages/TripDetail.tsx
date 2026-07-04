@@ -29,6 +29,12 @@ import {
   ChevronDown,
   X,
   ExternalLink,
+  Sun,
+  Cloud,
+  CloudRain,
+  CloudLightning,
+  CloudSnow,
+  Wind,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
@@ -414,6 +420,17 @@ function DayEmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
+function WeatherIcon({ main, className }: { main: string; className?: string }) {
+  switch (main?.toUpperCase()) {
+    case 'CLEAR': return <Sun className={className} />;
+    case 'CLOUDS': return <Cloud className={className} />;
+    case 'RAIN': return <CloudRain className={className} />;
+    case 'THUNDERSTORM': return <CloudLightning className={className} />;
+    case 'SNOW': return <CloudSnow className={className} />;
+    default: return <Wind className={className} />;
+  }
+}
+
 export default function TripDetail() {
   const params = useParams<{ id: string }>();
   const tripId = params.id;
@@ -437,6 +454,25 @@ export default function TripDetail() {
   const [shareLoading, setShareLoading] = useState(false);
   const [existingShares, setExistingShares] = useState<TripShare[]>([]);
   const [sharesLoading, setSharesLoading] = useState(false);
+  const [weather, setWeather] = useState<any>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+
+  // Load weather data
+  useEffect(() => {
+    if (!trip?.destination || !days[selectedDay - 1]) return;
+    
+    const dateStr = format(days[selectedDay - 1].date, "yyyy-MM-dd");
+    setWeatherLoading(true);
+    
+    fetch(`${import.meta.env.VITE_API_URL || ""}/api/weather?destination=${encodeURIComponent(trip.destination)}&date=${dateStr}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) setWeather(null);
+        else setWeather(data);
+      })
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
+  }, [trip?.destination, selectedDay, days]);
 
   // Load trip data
   useEffect(() => {
@@ -928,11 +964,25 @@ export default function TripDetail() {
                 <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">
                   {days[selectedDay - 1]?.label}
                 </div>
-                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)]">
-                  {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
-                  <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">
-                    {days[selectedDay - 1]?.weekday}
+                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)] flex items-center gap-4">
+                  <span>
+                    {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
+                    <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">
+                      {days[selectedDay - 1]?.weekday}
+                    </span>
                   </span>
+                  
+                  {/* Weather Display */}
+                  {weather && (
+                    <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-white/50 shadow-sm animate-in fade-in slide-in-from-left-2">
+                      <WeatherIcon main={weather.main} className="w-6 h-6 text-[oklch(0.62_0.12_220)]" />
+                      <div className="flex flex-col leading-none">
+                        <span className="text-sm font-black text-[oklch(0.22_0.08_220)]">{weather.temp}°C</span>
+                        <span className="text-[10px] font-bold text-blue-500">{Math.round(weather.pop * 100)}% 降雨</span>
+                      </div>
+                    </div>
+                  )}
+                  {weatherLoading && <Skeleton className="h-10 w-24 rounded-2xl" />}
                 </h2>
               </div>
               {/* 修改處：將原本的一個按鈕改為 flex-col 容器，並加入備案按鈕 */}
