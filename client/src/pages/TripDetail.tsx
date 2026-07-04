@@ -1,11 +1,8 @@
 /**
  * TripDetail — Per-day itinerary management
- * Design: Coastal Morning — Timeline layout with day tabs
- * Desktop: Day selector sidebar + activity timeline
- * Mobile: Horizontal day tabs + scrollable timeline
  */
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -35,11 +32,11 @@ import {
   CloudLightning,
   CloudSnow,
   Wind,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { AlertTriangle } from "lucide-react";
-import { format, parseISO, addDays } from "date-fns";
+import { format, parseISO, addDays, differenceInDays } from "date-fns";
 import { zhTW } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
@@ -100,7 +97,19 @@ const defaultActivityForm: ActivityForm = {
   images: [],
 };
 
-// ActivityDetail Component (Sheet/Dialog for viewing)
+// --- Helper Components ---
+
+function WeatherIcon({ main, className }: { main: string; className?: string }) {
+  switch (main?.toUpperCase()) {
+    case 'CLEAR': return <Sun className={className} />;
+    case 'CLOUDS': return <Cloud className={className} />;
+    case 'RAIN': return <CloudRain className={className} />;
+    case 'THUNDERSTORM': return <CloudLightning className={className} />;
+    case 'SNOW': return <CloudSnow className={className} />;
+    default: return <Wind className={className} />;
+  }
+}
+
 function ActivityDetailSheet({ 
   activity, 
   currency, 
@@ -130,7 +139,6 @@ function ActivityDetailSheet({
         side="bottom" 
         className="h-[90dvh] sm:max-w-md mx-auto rounded-t-[32px] bg-white overflow-hidden p-0 border-none flex flex-col [&>button]:hidden"
       >
-        {/* Drag Handle Area with Motion */}
         <motion.div 
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
@@ -156,7 +164,6 @@ function ActivityDetailSheet({
           </SheetHeader>
 
           <div className="space-y-8">
-            {/* Time and Stats */}
             <div className="flex flex-wrap gap-8">
               <div className="space-y-1">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">時間</div>
@@ -182,7 +189,6 @@ function ActivityDetailSheet({
               )}
             </div>
 
-            {/* Location Link */}
             <div className="space-y-3">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">地點</div>
               <button 
@@ -209,7 +215,6 @@ function ActivityDetailSheet({
               )}
             </div>
 
-            {/* Notes */}
             {activity.notes && (
               <div className="space-y-3">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">備註</div>
@@ -219,7 +224,6 @@ function ActivityDetailSheet({
               </div>
             )}
 
-            {/* Images */}
             {activity.images && activity.images.length > 0 && (
               <div className="space-y-3">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">照片</div>
@@ -235,7 +239,6 @@ function ActivityDetailSheet({
           </div>
         </div>
 
-        {/* Bottom Toolbar */}
         <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-4">
           <Button 
             onClick={onEdit}
@@ -258,7 +261,6 @@ function ActivityDetailSheet({
   );
 }
 
-// ActivityCard Component
 function ActivityCard({ 
   activity, 
   index, 
@@ -288,7 +290,6 @@ function ActivityCard({
   return (
     <>
     <div className="group relative flex gap-4 items-start w-full min-w-0">
-      {/* Time column */}
       <div className="w-12 pt-1 flex flex-col items-center">
         <span className="text-xs font-bold text-[oklch(0.45_0.05_220)]">
           {activity.time || "--:--"}
@@ -296,7 +297,6 @@ function ActivityCard({
         <div className={`mt-2 w-2.5 h-2.5 rounded-full border-2 border-white ring-2 ring-offset-1 ${config.dot}`} />
       </div>
 
-      {/* Content card */}
       <div 
         onClick={() => setShowDetail(true)}
         className="flex-1 min-w-0 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4 cursor-pointer"
@@ -364,7 +364,6 @@ function ActivityCard({
           </div>
         </div>
 
-        {/* Reorder arrows */}
         <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)] flex-shrink-0 w-10">
           <button 
             onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
@@ -386,7 +385,6 @@ function ActivityCard({
       </div>
     </div>
 
-    {/* Detail Sheet */}
     <ActivityDetailSheet 
       activity={activity}
       currency={currency}
@@ -420,16 +418,7 @@ function DayEmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function WeatherIcon({ main, className }: { main: string; className?: string }) {
-  switch (main?.toUpperCase()) {
-    case 'CLEAR': return <Sun className={className} />;
-    case 'CLOUDS': return <Cloud className={className} />;
-    case 'RAIN': return <CloudRain className={className} />;
-    case 'THUNDERSTORM': return <CloudLightning className={className} />;
-    case 'SNOW': return <CloudSnow className={className} />;
-    default: return <Wind className={className} />;
-  }
-}
+// --- Main Page Component ---
 
 export default function TripDetail() {
   const params = useParams<{ id: string }>();
@@ -457,24 +446,7 @@ export default function TripDetail() {
   const [weather, setWeather] = useState<any>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
 
-  // Load weather data
-  useEffect(() => {
-    if (!trip?.destination || !days[selectedDay - 1]) return;
-    
-    const dateStr = format(days[selectedDay - 1].date, "yyyy-MM-dd");
-    setWeatherLoading(true);
-    
-    fetch(`${import.meta.env.VITE_API_URL || ""}/api/weather?destination=${encodeURIComponent(trip.destination)}&date=${dateStr}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) setWeather(null);
-        else setWeather(data);
-      })
-      .catch(() => setWeather(null))
-      .finally(() => setWeatherLoading(false));
-  }, [trip?.destination, selectedDay, days]);
-
-  // Load trip data
+  // 1. Load trip data first
   useEffect(() => {
     if (!tripId) return;
     setTripLoading(true);
@@ -488,7 +460,7 @@ export default function TripDetail() {
       .finally(() => setTripLoading(false));
   }, [tripId]);
 
-  // Generate day list
+  // 2. Generate days based on trip
   const days = useMemo(() => {
     if (!trip?.startDate || !trip?.endDate) return [];
     const start = parseISO(trip.startDate);
@@ -506,32 +478,57 @@ export default function TripDetail() {
     }));
   }, [trip]);
 
+  // 3. Load weather data (depends on days)
+  useEffect(() => {
+    if (!trip?.destination || !days[selectedDay - 1]) return;
+    
+    const dateStr = format(days[selectedDay - 1].date, "yyyy-MM-dd");
+    setWeatherLoading(true);
+    
+    fetch(`${import.meta.env.VITE_API_URL || ""}/api/weather?destination=${encodeURIComponent(trip.destination)}&date=${dateStr}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) setWeather(null);
+        else setWeather(data);
+      })
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
+  }, [trip?.destination, selectedDay, days]);
+
   const currentDayActivities = useMemo(
     () => activitiesByDay[selectedDay] || [],
     [activitiesByDay, selectedDay]
   );
 
-  // Sorting
   const sortedItems = useMemo(() => {
     return [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [currentDayActivities]);
 
   const totalCost = activities.reduce((sum, a) => sum + Number(a.cost || 0), 0);
   const dayTotalCost = currentDayActivities.reduce((sum, a) => sum + Number(a.cost || 0), 0);
-  // Move Activity Up/Down
+
+  const costByCategory = useMemo(() => {
+    const stats: Record<string, number> = {};
+    activities.forEach(a => {
+      stats[a.category] = (stats[a.category] || 0) + Number(a.cost || 0);
+    });
+    return Object.entries(stats).map(([cat, val]) => ({
+      name: categoryConfig[cat]?.label || cat,
+      value: val,
+      color: categoryConfig[cat]?.dot.replace('bg-', '#').replace('500', '') || '#94a3b8'
+    })).filter(s => s.value > 0);
+  }, [activities]);
+
   const handleMoveActivity = async (index: number, direction: 'up' | 'down') => {
     if (!tripId) return;
     const newItems = [...sortedItems];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    
     if (targetIndex < 0 || targetIndex >= newItems.length) return;
 
-    // Swap items
     const temp = newItems[index];
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
 
-    // Prepare orders for API
     const orders = newItems.map((item, idx) => ({
       id: item.id!,
       sortOrder: idx
@@ -541,199 +538,119 @@ export default function TripDetail() {
       await reorderActivities(orders);
       toast.success("順序已更新");
     } catch (err) {
-      console.error("Reorder failed:", err);
       toast.error("更新順序失敗");
     }
   };
 
-  // ── Time conflict detection ──────────────────────────────────────────────
   const conflictingIds = useMemo(() => {
-    const withTime = currentDayActivities.filter((a) => a.time && a.duration);
-    const conflicted = new Set<string>();
-    for (let i = 0; i < withTime.length; i++) {
-      for (let j = i + 1; j < withTime.length; j++) {
-        const a = withTime[i];
-        const b = withTime[j];
-        const toMinutes = (t: string) => {
-          const [h, m] = t.split(":").map(Number);
-          return h * 60 + m;
-        };
-        const aStart = toMinutes(a.time!);
-        const aEnd = aStart + (a.duration || 0);
-        const bStart = toMinutes(b.time!);
-        const bEnd = bStart + (b.duration || 0);
-        if (aStart < bEnd && aEnd > bStart) {
-          if (a.id) conflicted.add(a.id);
-          if (b.id) conflicted.add(b.id);
-        }
+    const ids = new Set<string>();
+    const times: Record<string, string[]> = {};
+    activities.forEach(a => {
+      if (a.time) {
+        if (!times[a.time]) times[a.time] = [];
+        times[a.time].push(a.id!);
       }
-    }
-    return conflicted;
-  }, [currentDayActivities]);
-
-  // ── Cost breakdown by category (all days) ───────────────────────────────
-  const costByCategory = useMemo(() => {
-    // 定義各類別的專屬顏色
-    const PIE_COLORS: Record<string, string> = {
-      ATTRACTION: "#3b82f6", // 藍色
-      RESTAURANT: "#f97316", // 橘色
-      HOTEL: "#a855f7",      // 紫色
-      TRANSPORT: "#22c55e",  // 綠色
-      OTHER: "#94a3b8",      // 灰色
-    };
-
-    return Object.entries(categoryConfig)
-      .map(([key, cfg]) => {
-        // 【關鍵修復】將所有 cost 強制轉為 Number，確保運算正確
-        const total = activities
-          .filter((a) => a.category === key)
-          .reduce((sum, a) => sum + Number(a.cost || 0), 0);
-        
-        return {
-          name: cfg.label,
-          value: total,
-          color: PIE_COLORS[key] || "#94a3b8", // 對應上面定義的顏色
-        };
-      })
-      .filter((d) => d.value > 0); // 只顯示有花費的類別
+    });
+    Object.values(times).forEach(group => {
+      if (group.length > 1) group.forEach(id => ids.add(id));
+    });
+    return ids;
   }, [activities]);
 
   const openAddActivity = () => {
     setEditingActivity(null);
-    setForm(defaultActivityForm);
+    setForm({ ...defaultActivityForm, time: "10:00" });
     setShowAddActivity(true);
   };
 
-  const openEditActivity = (activity: Activity) => {
-    setEditingActivity(activity);
-    setForm({
-      title: activity.title,
-      category: activity.category as Activity['category'],
-      time: activity.time || "",
-      location: activity.location || "",
-      address: activity.address || "",
-      notes: activity.notes || "",
-      cost: activity.cost?.toString() || "",
-      duration: activity.duration?.toString() || "",
-      lat: (activity as any).lat,
-      lng: (activity as any).lng,
-      images: activity.images || [],
-    });
-    setShowAddActivity(true);
-  };
-
-  const handleSaveActivity = async () => {
-    if (!form.title.trim()) {
-      toast.error("請輸入活動名稱");
-      return;
-    }
-    if (!user || !tripId) return;
-
+  const handleCreateActivity = async () => {
+    if (!tripId || !form.title) return;
     setIsSaving(true);
     try {
-      const activityData = {
-        title: form.title.trim(),
-        category: form.category,
-        time: form.time || undefined,
-        location: form.location || undefined,
-        address: form.address || undefined,
-        notes: form.notes || undefined,
-        cost: form.cost ? parseFloat(form.cost) : undefined,
-        duration: form.duration ? parseInt(form.duration) : undefined,
-        lat: form.lat,
-        lng: form.lng,
-        images: form.images,
-      };
-
-      if (editingActivity?.id) {
-        await updateActivity(editingActivity.id, activityData);
-        toast.success("活動已更新");
-      } else {
-        await createActivity({
-          ...activityData,
-          day: selectedDay,
-          date: days[selectedDay - 1]?.date
-            ? format(days[selectedDay - 1].date, "yyyy-MM-dd")
-            : undefined,
-          sortOrder: currentDayActivities.length,
-        });
-        toast.success("活動已新增");
-      }
+      await createActivity({
+        ...form,
+        day: selectedDay,
+        cost: Number(form.cost) || 0,
+        duration: Number(form.duration) || 0,
+        sortOrder: sortedItems.length
+      });
       setShowAddActivity(false);
-      setForm(defaultActivityForm);
-    } catch {
-      toast.error("儲存失敗，請稍後再試");
+      toast.success("活動已新增");
+    } catch (err) {
+      toast.error("新增失敗");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateActivity = async () => {
+    if (!editingActivity || !form.title) return;
+    setIsSaving(true);
+    try {
+      await updateActivity(editingActivity.id!, {
+        ...form,
+        cost: Number(form.cost) || 0,
+        duration: Number(form.duration) || 0,
+      });
+      setShowAddActivity(false);
+      toast.success("活動已更新");
+    } catch (err) {
+      toast.error("更新失敗");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDeleteActivity = async () => {
-    if (!deletingActivity?.id) return;
+    if (!deletingActivity) return;
     try {
-      await deleteActivity(deletingActivity.id);
-      toast.success("活動已刪除");
+      await deleteActivity(deletingActivity.id!);
       setDeletingActivity(null);
-    } catch {
+      toast.success("活動已刪除");
+    } catch (err) {
       toast.error("刪除失敗");
     }
   };
 
-  // ── Share trip ──────────────────────────────────────────────────────────
+  const handleExportPdf = async () => {
+    if (!trip) return;
+    setIsExporting(true);
+    try {
+      await exportTripToPdf(trip, activities);
+      toast.success("PDF 匯出成功");
+    } catch (err) {
+      toast.error("匯出失敗");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleShareTrip = async () => {
-    if (!tripId) return;
     setShowShareDialog(true);
-    setShareEmail("");
     setSharesLoading(true);
     try {
-      const { data } = await tripSharingApi.getShares(tripId);
+      const { data } = await tripSharingApi.list(tripId!);
       setExistingShares(data.shares);
-    } catch {
-      setExistingShares([]);
+    } catch (err) {
+      console.error(err);
     } finally {
       setSharesLoading(false);
     }
   };
 
-  const handleShareWithEmail = async () => {
-    if (!tripId || !shareEmail.trim()) return;
+  const handleCreateShare = async () => {
+    if (!shareEmail) return;
     setShareLoading(true);
     try {
-      await tripSharingApi.shareWith(tripId, shareEmail.trim());
-      toast.success(`已分享給 ${shareEmail}`);
+      await tripSharingApi.create(tripId!, shareEmail);
       setShareEmail("");
-      const { data } = await tripSharingApi.getShares(tripId);
+      const { data } = await tripSharingApi.list(tripId!);
       setExistingShares(data.shares);
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || "分享失敗，請確認對方帳號已註冊";
-      toast.error(msg);
+      toast.success("分享成功");
+    } catch (err) {
+      toast.error("分享失敗");
     } finally {
       setShareLoading(false);
-    }
-  };
-
-  const handleUnshare = async (email: string) => {
-    if (!tripId) return;
-    try {
-      await tripSharingApi.unshareWith(tripId, email);
-      setExistingShares((prev) => prev.filter((s) => s.sharedWith !== email));
-      toast.success(`已取消分享`);
-    } catch {
-      toast.error("取消分享失敗");
-    }
-  };
-
-  // ── Export PDF ───────────────────────────────────────────────────────────
-  const handleExportPdf = async () => {
-    if (!trip) return;
-    setIsExporting(true);
-    try {
-      await exportTripToPdf(trip, activitiesByDay);
-      toast.success("PDF 匯出成功！");
-    } catch {
-      toast.error("PDF 匯出失敗");
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -755,10 +672,7 @@ export default function TripDetail() {
             <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
           <h2 className="text-xl font-bold text-[oklch(0.22_0.08_220)] mb-2">找不到此行程</h2>
-          <p className="text-gray-500 mb-6">此行程可能已被刪除，或您沒有權限查看。</p>
-          <Button onClick={() => setLocation("/dashboard")} className="rounded-full w-full">
-            回到儀表板
-          </Button>
+          <Button onClick={() => setLocation("/dashboard")} className="rounded-full w-full">回到儀表板</Button>
         </div>
       </div>
     );
@@ -766,22 +680,15 @@ export default function TripDetail() {
 
   return (
     <div className="min-h-screen bg-[oklch(0.97_0.015_80)] lg:flex">
-      {/* ===== Desktop Sidebar ===== */}
       <aside className="hidden lg:flex w-80 flex-col bg-white border-r border-[oklch(0.92_0.01_220)] h-screen sticky top-0">
         <div className="p-6 border-b border-[oklch(0.95_0.005_220)]">
-          <button 
-            onClick={() => setLocation("/dashboard")}
-            className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] hover:text-[oklch(0.22_0.08_220)] transition-colors mb-6 group"
-          >
+          <button onClick={() => setLocation("/dashboard")} className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] hover:text-[oklch(0.22_0.08_220)] transition-colors mb-6 group">
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm font-bold">返回儀表板</span>
           </button>
-          
           <div className="flex items-center gap-3 mb-1">
             <img src={LOGO_URL} alt="Logo" className="w-6 h-6" />
-            <h1 className="text-2xl font-['Playfair_Display'] font-black text-[oklch(0.22_0.08_220)] truncate">
-              {trip.title}
-            </h1>
+            <h1 className="text-2xl font-['Playfair_Display'] font-black text-[oklch(0.22_0.08_220)] truncate">{trip.title}</h1>
           </div>
           <div className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] text-sm">
             <MapPin className="w-3.5 h-3.5" />
@@ -790,189 +697,89 @@ export default function TripDetail() {
             <span>{days.length} 天</span>
           </div>
         </div>
-
         <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
           {days.map((d) => (
-            <button
-              key={d.day}
-              onClick={() => setSelectedDay(d.day)}
-              className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${
-                selectedDay === d.day
-                  ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-[1.02]"
-                  : "hover:bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"
-              }`}
-            >
+            <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-[1.02]" : "hover:bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
               <div className="text-left">
-                <div className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>
-                  {d.label}
-                </div>
+                <div className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>{d.label}</div>
                 <div className="font-bold">{d.dateStr} {d.weekday}</div>
               </div>
-              <div className={`text-xs font-bold px-2 py-1 rounded-lg ${selectedDay === d.day ? "bg-white/20" : "bg-gray-100"}`}>
-                {activitiesByDay[d.day]?.length || 0}
-              </div>
+              <div className={`text-xs font-bold px-2 py-1 rounded-lg ${selectedDay === d.day ? "bg-white/20" : "bg-gray-100"}`}>{activitiesByDay[d.day]?.length || 0}</div>
             </button>
           ))}
         </div>
-
         <div className="p-6 bg-[oklch(0.98_0.005_220)] border-t border-[oklch(0.95_0.005_220)]">
           <div className="flex justify-between items-center mb-4">
             <span className="text-sm font-bold text-[oklch(0.45_0.05_220)]">預算概況</span>
-            <span className="text-xs font-bold text-[oklch(0.45_0.05_220)]">
-              {totalCost.toLocaleString()} / {trip.budget?.toLocaleString() || 0} {trip.currency}
-            </span>
+            <span className="text-xs font-bold text-[oklch(0.45_0.05_220)]">{totalCost.toLocaleString()} / {trip.budget?.toLocaleString() || 0} {trip.currency}</span>
           </div>
           <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mb-6">
-            <div 
-              className="h-full bg-[oklch(0.62_0.12_220)] transition-all duration-500"
-              style={{ width: `${Math.min(100, (totalCost / (trip.budget || 1)) * 100)}%` }}
-            />
+            <div className="h-full bg-[oklch(0.62_0.12_220)] transition-all duration-500" style={{ width: `${Math.min(100, (totalCost / (trip.budget || 1)) * 100)}%` }} />
           </div>
-          
           <div className="grid grid-cols-2 gap-3">
-            <Button 
-              onClick={handleExportPdf}
-              disabled={isExporting}
-              variant="outline" 
-              className="rounded-xl h-10 border-[oklch(0.9_0.02_220)] text-[oklch(0.35_0.06_220)] hover:bg-gray-50"
-            >
-              <Download className="w-4 h-4 mr-2" /> 匯出
-            </Button>
-            <Button 
-              onClick={handleShareTrip}
-              variant="outline" 
-              className="rounded-xl h-10 border-[oklch(0.9_0.02_220)] text-[oklch(0.35_0.06_220)] hover:bg-gray-50"
-            >
-              <Share2 className="w-4 h-4 mr-2" /> 分享
-            </Button>
+            <Button onClick={handleExportPdf} disabled={isExporting} variant="outline" className="rounded-xl h-10 border-[oklch(0.9_0.02_220)] text-[oklch(0.35_0.06_220)] hover:bg-gray-50"><Download className="w-4 h-4 mr-2" /> 匯出</Button>
+            <Button onClick={handleShareTrip} variant="outline" className="rounded-xl h-10 border-[oklch(0.9_0.02_220)] text-[oklch(0.35_0.06_220)] hover:bg-gray-50"><Share2 className="w-4 h-4 mr-2" /> 分享</Button>
           </div>
         </div>
       </aside>
 
-      {/* ===== Mobile Header ===== */}
       <header className="lg:hidden bg-white border-b border-[oklch(0.92_0.01_220)] sticky top-0 z-20">
         <div className="p-4 flex items-center justify-between">
-          <button onClick={() => setLocation("/dashboard")} className="p-2 -ml-2">
-            <ArrowLeft className="w-5 h-5 text-[oklch(0.22_0.08_220)]" />
-          </button>
+          <button onClick={() => setLocation("/dashboard")} className="p-2 -ml-2"><ArrowLeft className="w-5 h-5 text-[oklch(0.22_0.08_220)]" /></button>
           <div className="text-center flex-1 px-4">
             <h1 className="text-lg font-black text-[oklch(0.22_0.08_220)] truncate">{trip.title}</h1>
-            <p className="text-[10px] font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest">
-              {trip.destination} • {days.length} 天
-            </p>
+            <p className="text-[10px] font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest">{trip.destination} • {days.length} 天</p>
           </div>
-          <div className="flex gap-1">
-            <button onClick={handleShareTrip} className="p-2">
-              <Share2 className="w-5 h-5 text-[oklch(0.22_0.08_220)]" />
-            </button>
-          </div>
+          <button onClick={handleShareTrip} className="p-2"><Share2 className="w-5 h-5 text-[oklch(0.22_0.08_220)]" /></button>
         </div>
-        
         <div className="flex overflow-x-auto px-4 pb-3 no-scrollbar gap-2">
           {days.map((d) => (
-            <button
-              key={d.day}
-              onClick={() => setSelectedDay(d.day)}
-              className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${
-                selectedDay === d.day
-                  ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-105"
-                  : "bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"
-              }`}
-            >
-              <span className={`text-[10px] font-bold uppercase mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>
-                Day {d.day}
-              </span>
+            <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-105" : "bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
+              <span className={`text-[10px] font-bold uppercase mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>Day {d.day}</span>
               <span className="text-sm font-bold">{d.dateStr}</span>
             </button>
           ))}
         </div>
       </header>
 
-      {/* ===== Main Content ===== */}
       <div className="flex-1 flex flex-col lg:h-screen lg:overflow-hidden">
-        {/* Statistics Banner (Desktop Only) */}
         <div className="hidden lg:grid grid-cols-3 gap-6 p-8 bg-[oklch(0.98_0.005_220)] border-b border-[oklch(0.95_0.005_220)]">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-[oklch(0.92_0.01_220)]">
             <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">今日預算</div>
-            <div className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
-              {dayTotalCost.toLocaleString()} <span className="text-sm font-bold text-gray-400">{trip.currency}</span>
-            </div>
+            <div className="text-2xl font-black text-[oklch(0.22_0.08_220)]">{dayTotalCost.toLocaleString()} <span className="text-sm font-bold text-gray-400">{trip.currency}</span></div>
           </div>
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-[oklch(0.92_0.01_220)]">
             <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">今日活動</div>
-            <div className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
-              {currentDayActivities.length} <span className="text-sm font-bold text-gray-400">個項目</span>
-            </div>
+            <div className="text-2xl font-black text-[oklch(0.22_0.08_220)]">{currentDayActivities.length} <span className="text-sm font-bold text-gray-400">個項目</span></div>
           </div>
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-[oklch(0.92_0.01_220)] flex items-center justify-between">
             <div>
               <div className="text-xs font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">預算分佈</div>
               <div className="text-xs text-gray-400 font-medium">依類別統計</div>
             </div>
-           <div className="h-20 w-36 -mr-4"> 
+            <div className="h-20 w-36 -mr-4"> 
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={costByCategory.length > 0 ? costByCategory : [{ name: 'Empty', value: 1, color: '#f3f4f6' }]}
-                    innerRadius={15}
-                    outerRadius={24}
-                    paddingAngle={2}
-                    dataKey="value"
-                    labelLine={false} // 隱藏預設的長引線
-                    label={({ cx, cy, midAngle, outerRadius, name }) => {
-                      if (name === 'Empty') return null; // 空資料時不顯示文字
-                      
-                      // 計算文字在外側的位置 (外半徑 + 12px)
-                      const radius = outerRadius + 12;
-                      const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
-                      const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
-                      
-                      return (
-                        <text 
-                          x={x} 
-                          y={y} 
-                          fill="#64748b" 
-                          textAnchor={x > cx ? 'start' : 'end'} // 自動根據左右側對齊
-                          dominantBaseline="central" 
-                          fontSize={11} 
-                          fontWeight="bold"
-                        >
-                          {name}
-                        </text>
-                      );
-                    }}
-                  >
-                    {(costByCategory.length > 0 ? costByCategory : [{ color: '#f3f4f6' }]).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                  <Pie data={costByCategory.length > 0 ? costByCategory : [{ name: 'Empty', value: 1, color: '#f3f4f6' }]} innerRadius={15} outerRadius={24} paddingAngle={2} dataKey="value" labelLine={false} label={({ cx, cy, midAngle, outerRadius, name }) => { if (name === 'Empty') return null; const radius = outerRadius + 12; const x = cx + radius * Math.cos(-midAngle * Math.PI / 180); const y = cy + radius * Math.sin(-midAngle * Math.PI / 180); return <text x={x} y={y} fill="#64748b" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={11} fontWeight="bold">{name}</text>; }}>
+                    {(costByCategory.length > 0 ? costByCategory : [{ color: '#f3f4f6' }]).map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => [`${value.toLocaleString()} ${trip?.currency || ''}`, '總計']}
-                    contentStyle={{ borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
+                  <Tooltip formatter={(value: number) => [`${value.toLocaleString()} ${trip?.currency || ''}`, '總計']} contentStyle={{ borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* Timeline Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end justify-between mb-8">
               <div>
-                <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">
-                  {days[selectedDay - 1]?.label}
-                </div>
-                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)] flex items-center gap-4">
+                <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">{days[selectedDay - 1]?.label}</div>
+                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)] flex items-center gap-4 flex-wrap">
                   <span>
                     {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
-                    <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">
-                      {days[selectedDay - 1]?.weekday}
-                    </span>
+                    <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">{days[selectedDay - 1]?.weekday}</span>
                   </span>
-                  
-                  {/* Weather Display */}
                   {weather && (
                     <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-white/50 shadow-sm animate-in fade-in slide-in-from-left-2">
                       <WeatherIcon main={weather.main} className="w-6 h-6 text-[oklch(0.62_0.12_220)]" />
@@ -985,299 +792,47 @@ export default function TripDetail() {
                   {weatherLoading && <Skeleton className="h-10 w-24 rounded-2xl" />}
                 </h2>
               </div>
-              {/* 修改處：將原本的一個按鈕改為 flex-col 容器，並加入備案按鈕 */}
               <div className="hidden lg:flex flex-col gap-2">
-                <Button 
-                  variant="outline"
-                  onClick={() => toast.info("備案功能開發中...")} // 先暫時不實作功能
-                  className="rounded-full border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)] hover:bg-gray-50"
-                >
-                  <Plus className="w-4 h-4 mr-2" /> 新增備案
-                </Button>
-                <Button 
-                  onClick={openAddActivity}
-                  className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"
-                >
-                  <Plus className="w-4 h-4 mr-2" /> 新增活動
-                </Button>
+                <Button variant="outline" onClick={() => toast.info("備案功能開發中...")} className="rounded-full border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)] hover:bg-gray-50"><Plus className="w-4 h-4 mr-2" /> 新增備案</Button>
+                <Button onClick={openAddActivity} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
               </div>
             </div>
 
-            {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-3xl" />)}
-              </div>
-            ) : currentDayActivities.length === 0 ? (
-              <DayEmptyState onAdd={openAddActivity} />
-            ) : (
-              <div className="relative">
-                {/* Timeline line */}
-                <div className="absolute left-[19px] top-6 bottom-6 w-0.5 bg-[oklch(0.88_0.008_220)]" />
-
-                <div className="space-y-3">
-                  {sortedItems.map((item, index) => (
-                    <div key={item.id}>
-                      <ActivityCard
-                        activity={item}
-                        index={index}
-                        isFirst={index === 0}
-                        isLast={index === sortedItems.length - 1}
-                        currency={trip?.currency}
-                        hasConflict={conflictingIds.has(item.id!)}
-                        onEdit={() => openEditActivity(item)}
-                        onDelete={() => setDeletingActivity(item)}
-                        onMoveUp={() => handleMoveActivity(index, 'up')}
-                        onMoveDown={() => handleMoveActivity(index, 'down')}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
+              {sortedItems.length > 0 ? sortedItems.map((activity, idx) => (
+                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === sortedItems.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [] }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up')} onMoveDown={() => handleMoveActivity(idx, 'down')} />
+              )) : <DayEmptyState onAdd={openAddActivity} />}
+            </div>
           </div>
         </main>
+
+        <div className="lg:hidden fixed bottom-6 right-6 z-30">
+          <Button onClick={openAddActivity} className="w-14 h-14 rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] shadow-2xl flex items-center justify-center p-0"><Plus className="w-6 h-6 text-white" /></Button>
+        </div>
       </div>
 
-      {/* Mobile FAB */}
-      <button
-        onClick={openAddActivity}
-        className="lg:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[oklch(0.62_0.12_220)] text-white shadow-lg flex items-center justify-center active:scale-[0.9] transition-transform z-10"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
-
-      {/* ===== Add/Edit Activity Dialog ===== */}
       <Dialog open={showAddActivity} onOpenChange={setShowAddActivity}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-white">
-          <DialogHeader>
-            <DialogTitle className="font-['Playfair_Display'] text-xl text-[oklch(0.22_0.08_220)]">
-              {editingActivity ? "編輯活動" : `新增活動 — Day ${selectedDay}`}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            {/* Category selector */}
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動類型</Label>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(categoryConfig).map(([key, config]) => {
-                  const Icon = config.icon;
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => setForm((prev) => ({ ...prev, category: key as Activity["category"] }))}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all duration-150 ${
-                        form.category === key
-                          ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      {config.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="title">活動名稱 *</Label>
-              <Input
-                id="title"
-                value={form.title}
-                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="例如：東京鐵塔、築地市場..."
-                className="rounded-xl"
-              />
-            </div>
-
+        <DialogContent className="bg-white sm:max-w-lg rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 pb-0"><DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">{editingActivity ? "編輯活動" : "新增活動"}</DialogTitle></DialogHeader>
+          <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱</Label><Input placeholder="要去哪裡？" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)]" /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="time">開始時間</Label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input
-                    id="time"
-                    type="time"
-                    value={form.time}
-                    onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
-                    className="pl-10 rounded-xl"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="duration">預計時長 (分鐘)</Label>
-                <Input
-                  id="duration"
-                  type="number"
-                  value={form.duration}
-                  onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))}
-                  placeholder="60"
-                  className="rounded-xl"
-                />
-              </div>
+              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">類別</Label><Select value={form.category} onValueChange={(val: any) => setForm({ ...form, category: val })}><SelectTrigger className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(categoryConfig).map(([key, cfg]) => <SelectItem key={key} value={key}>{cfg.label}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">時間</Label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             </div>
-
-            <div className="space-y-1.5">
-              <Label>地點搜尋</Label>
-              {/* 【修正】傳入 defaultValue */}
-              <PlaceSearch 
-                defaultValue={form.location}
-                onPlaceSelect={(place) => {
-                  setForm(prev => ({
-                    ...prev,
-                    location: place.name,
-                    address: place.address || "",
-                    lat: place.lat,
-                    lng: place.lng
-                  }));
-                }}
-              />
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." initialValue={form.location} /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預計時長 (分鐘)</Label><Input type="number" placeholder="60" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
+              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預估花費 ({trip.currency})</Label><Input type="number" placeholder="0" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             </div>
-
-            {(form.lat && form.lng) && (
-              <div className="h-40 rounded-xl overflow-hidden border border-gray-200">
-                <MapPreview lat={form.lat} lng={form.lng} title={form.location} />
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="cost">預估花費 ({trip?.currency})</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  id="cost"
-                  type="number"
-                  value={form.cost}
-                  onChange={(e) => setForm((prev) => ({ ...prev, cost: e.target.value }))}
-                  className="pl-10 rounded-xl"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="notes">備註</Label>
-              <Textarea
-                id="notes"
-                value={form.notes}
-                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="有什麼需要注意的地方嗎？"
-                className="rounded-xl min-h-[100px] resize-none"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>活動照片</Label>
-              <CloudinaryImageUpload 
-                images={form.images}
-                onChange={(images) => setForm(prev => ({ ...prev, images }))}
-                maxImages={5}
-              />
-            </div>
-
-            <div className="pt-2 flex gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowAddActivity(false)} 
-                className="flex-1 rounded-xl h-12"
-              >
-                取消
-              </Button>
-              <Button 
-                onClick={handleSaveActivity} 
-                disabled={isSaving}
-                className="flex-1 rounded-xl h-12 bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)]"
-              >
-                {isSaving ? "儲存中..." : "儲存活動"}
-              </Button>
-            </div>
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
           </div>
+          <div className="p-8 pt-0 flex gap-3"><Button variant="outline" onClick={() => setShowAddActivity(false)} className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</Button><Button onClick={editingActivity ? handleUpdateActivity : handleCreateActivity} disabled={isSaving || !form.title} className="flex-1 h-12 rounded-xl bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] text-white">{isSaving ? "儲存中..." : (editingActivity ? "更新活動" : "新增活動")}</Button></div>
         </DialogContent>
       </Dialog>
 
-      {/* ===== Share Dialog ===== */}
-      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent className="max-w-md bg-white">
-          <DialogHeader>
-            <DialogTitle className="font-['Playfair_Display'] text-xl text-[oklch(0.22_0.08_220)]">
-              分享行程
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 pt-2">
-            <p className="text-sm text-gray-500">
-              輸入對方的註冊 Email，對方登入後就能在「分享行程」看到此行程。
-            </p>
-            
-            <div className="flex gap-2">
-              <Input
-                value={shareEmail}
-                onChange={(e) => setShareEmail(e.target.value)}
-                placeholder="輸入 Email 地址"
-                className="rounded-xl"
-              />
-              <Button 
-                onClick={handleShareWithEmail}
-                disabled={shareLoading || !shareEmail.trim()}
-                className="rounded-xl bg-[oklch(0.62_0.12_220)] hover:bg-[oklch(0.55_0.14_145)]"
-              >
-                分享
-              </Button>
-            </div>
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[oklch(0.45_0.05_220)] flex items-center gap-2">
-                <Share2 className="w-3.5 h-3.5" /> 已分享對象
-              </h4>
-              <div className="space-y-2">
-                {sharesLoading ? (
-                  <Skeleton className="h-12 w-full rounded-xl" />
-                ) : existingShares.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic py-4 text-center bg-gray-50 rounded-2xl">
-                    尚未分享給任何人
-                  </p>
-                ) : (
-                  existingShares.map((share) => (
-                    <div key={share.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[oklch(0.62_0.12_220)] flex items-center justify-center text-white text-xs font-bold">
-                          {share.sharedWith[0].toUpperCase()}
-                        </div>
-                        <span className="text-sm text-[oklch(0.22_0.08_220)]">{share.sharedWith}</span>
-                      </div>
-                      <button 
-                        onClick={() => handleUnshare(share.sharedWith)}
-                        className="text-xs text-red-500 font-bold hover:underline"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===== Delete Confirmation ===== */}
-      <AlertDialog open={!!deletingActivity} onOpenChange={(open) => !open && setDeletingActivity(null)}>
-        <AlertDialogContent className="bg-white">
-          <AlertDialogHeader>
-            <AlertDialogTitle>確定要刪除此活動嗎？</AlertDialogTitle>
-            <AlertDialogDescription>
-              此操作無法復原，該活動將從行程中永久移除。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">取消</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteActivity}
-              className="rounded-xl bg-red-600 hover:bg-red-700"
-            >
-              刪除活動
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AlertDialog open={!!deletingActivity} onOpenChange={() => setDeletingActivity(null)}><AlertDialogContent className="rounded-[32px] bg-white border-none p-8"><AlertDialogHeader><AlertDialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">確定要刪除？</AlertDialogTitle><AlertDialogDescription className="text-gray-500">「{deletingActivity?.title}」將被永久移除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter className="mt-6 gap-3"><AlertDialogCancel className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</AlertDialogCancel><AlertDialogAction onClick={handleDeleteActivity} className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white border-none">確定刪除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }
