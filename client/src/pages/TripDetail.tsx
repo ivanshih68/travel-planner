@@ -295,14 +295,14 @@ function ActivityCard({
         onClick={() => setShowDetail(true)}
         className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-[oklch(0.92_0.01_220)] hover:shadow-md transition-shadow flex gap-4 cursor-pointer"
       >
-        <div className="flex-1">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex justify-between items-start mb-2">
-            <div className="flex items-center gap-2">
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ${config.color}`}>
                 {config.label}
               </span>
               {hasConflict && (
-                <div className="flex items-center gap-1 text-[oklch(0.65_0.18_35)] bg-orange-50 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1 text-[oklch(0.65_0.18_35)] bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">
                   <AlertTriangle className="w-3 h-3" />
                   <span className="text-[10px] font-bold">時間衝突</span>
                 </div>
@@ -329,13 +329,13 @@ function ActivityCard({
             </DropdownMenu>
           </div>
 
-          <h3 className="text-base font-bold text-[oklch(0.22_0.08_220)] mb-1">{activity.title}</h3>
+          <h3 className="text-base font-bold text-[oklch(0.22_0.08_220)] mb-1 truncate">{activity.title}</h3>
           
           <div className="space-y-1.5">
             {activity.location && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 max-w-full">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 w-full">
                 <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate min-w-0">{activity.location}</span>
+                <span className="truncate min-w-0 block flex-1">{activity.location}</span>
               </div>
             )}
             
@@ -357,7 +357,7 @@ function ActivityCard({
         </div>
 
         {/* Reorder arrows */}
-        <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)] flex-shrink-0">
+        <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)] flex-shrink-0 w-[48px]">
           <button 
             onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
             disabled={isFirst}
