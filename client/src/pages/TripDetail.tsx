@@ -333,9 +333,11 @@ function ActivityCard({
           
           <div className="space-y-1.5">
             {activity.location && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 w-full">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 w-full overflow-hidden">
                 <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate min-w-0 block flex-1">{activity.location}</span>
+                <span className="truncate block flex-1 min-w-0" style={{ maxWidth: 'calc(100% - 20px)' }}>
+                  {activity.location}
+                </span>
               </div>
             )}
             
@@ -357,7 +359,7 @@ function ActivityCard({
         </div>
 
         {/* Reorder arrows */}
-        <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)] flex-shrink-0 w-[48px]">
+        <div className="flex flex-col justify-center gap-1 border-l pl-4 border-[oklch(0.95_0.005_220)] flex-shrink-0 w-10">
           <button 
             onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
             disabled={isFirst}
