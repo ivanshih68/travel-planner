@@ -825,9 +825,59 @@ export default function TripDetail() {
             </div>
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
-              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
-                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === mainActivities.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [] }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up')} onMoveDown={() => handleMoveActivity(idx, 'down')} />
-              )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
+              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => {
+                const isPlanB = activity.isBackup;
+                const prevIsMain = idx > 0 && !mainActivities[idx - 1].isBackup;
+                const showSeparator = isPlanB && prevIsMain;
+
+                return (
+                  <div key={activity.id} className="space-y-6">
+                    {showSeparator && (
+                      <div className="relative py-4 flex items-center gap-4">
+                        <div className="w-12 flex justify-center z-10">
+                          <div className="w-3 h-3 rounded-full bg-orange-400 ring-4 ring-orange-50" />
+                        </div>
+                        <div className="flex-1 flex items-center gap-4">
+                          <div className="h-px flex-1 border-t-2 border-dashed border-orange-200" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
+                            Plan B 備案活動
+                          </span>
+                          <div className="h-px flex-1 border-t-2 border-dashed border-orange-200" />
+                        </div>
+                      </div>
+                    )}
+                    <ActivityCard 
+                      activity={activity} 
+                      index={idx} 
+                      isFirst={idx === 0} 
+                      isLast={idx === mainActivities.length - 1} 
+                      currency={trip.currency} 
+                      hasConflict={conflictingIds.has(activity.id!)} 
+                      onEdit={() => { 
+                        setEditingActivity(activity); 
+                        setForm({ 
+                          title: activity.title, 
+                          category: activity.category, 
+                          time: activity.time || "", 
+                          location: activity.location || "", 
+                          address: activity.address || "", 
+                          notes: activity.notes || "", 
+                          cost: activity.cost?.toString() || "", 
+                          duration: activity.duration?.toString() || "", 
+                          lat: (activity as any).lat, 
+                          lng: (activity as any).lng, 
+                          images: activity.images || [],
+                          isBackup: activity.isBackup || false
+                        }); 
+                        setShowAddActivity(true); 
+                      }} 
+                      onDelete={() => setDeletingActivity(activity)} 
+                      onMoveUp={() => handleMoveActivity(idx, 'up')} 
+                      onMoveDown={() => handleMoveActivity(idx, 'down')} 
+                    />
+                  </div>
+                );
+              }) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
             </div>
 
 
