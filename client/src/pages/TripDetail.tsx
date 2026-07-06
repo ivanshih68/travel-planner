@@ -588,8 +588,8 @@ export default function TripDetail() {
         ...form,
         time: formattedTime || null,
         day: selectedDay,
-        cost: Number(form.cost) || 0,
-        duration: Number(form.duration) || 0,
+        cost: form.cost === "" ? null : Number(form.cost),
+        duration: form.duration === "" ? null : Number(form.duration),
         sortOrder: mainActivities.length,
         isBackup: form.isBackup
       });
@@ -614,8 +614,8 @@ export default function TripDetail() {
       await updateActivity(editingActivity.id!, {
         ...form,
         time: formattedTime || null,
-        cost: Number(form.cost) || 0,
-        duration: Number(form.duration) || 0,
+        cost: form.cost === "" ? null : Number(form.cost),
+        duration: form.duration === "" ? null : Number(form.duration),
         isBackup: form.isBackup,
       });
       setShowAddActivity(false);

@@ -87,6 +87,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
         lat: lat ?? null,
         lng: lng ?? null,
         cost: cost ?? null,
+        duration: rest.duration ?? null,
       },
     });
     res.status(201).json({ activity });
@@ -161,6 +162,7 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
       ...(cost !== undefined ? { cost } : {}),
+      ...(rest.duration !== undefined ? { duration: rest.duration } : {}),
     },
   });
   res.json({ activity: updated });
