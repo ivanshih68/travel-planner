@@ -12,7 +12,7 @@ const activitySchema = z.object({
   title: z.string().min(1, "活動名稱不能為空").max(100),
   category: z.enum(["ATTRACTION", "RESTAURANT", "HOTEL", "TRANSPORT", "OTHER"]),
   time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-  duration: z.number().int().positive().optional().nullable(),
+  duration: z.number().int().min(0).optional().nullable(),
   location: z.string().max(200).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   lat: z.number().optional().nullable(),
@@ -21,6 +21,7 @@ const activitySchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   images: z.array(z.string().url()).max(5).optional().default([]),
   sortOrder: z.number().int().default(0),
+  isBackup: z.boolean().default(false),
 });
 
 /**
@@ -75,12 +76,13 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, ...rest } = parsed.data;
+  const { date, lat, lng, cost, isBackup, ...rest } = parsed.data;
   try {
     const activity = await prisma.activity.create({
       data: {
         ...rest,
         tripId,
+        isBackup: isBackup ?? false,
         date: date ? new Date(date) : null,
         lat: lat ?? null,
         lng: lng ?? null,
@@ -149,11 +151,12 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, ...rest } = parsed.data;
+  const { date, lat, lng, cost, isBackup, ...rest } = parsed.data;
   const updated = await prisma.activity.update({
     where: { id: req.params.id },
     data: {
       ...rest,
+      ...(isBackup !== undefined ? { isBackup } : {}),
       ...(date !== undefined ? { date: date ? new Date(date) : null } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),

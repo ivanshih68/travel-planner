@@ -579,8 +579,14 @@ export default function TripDetail() {
     if (!tripId || !form.title) return;
     setIsSaving(true);
     try {
+      let formattedTime = form.time;
+      if (form.time && /^\d:\d{2}$/.test(form.time)) {
+        formattedTime = `0${form.time}`;
+      }
+      
       await createActivity({
         ...form,
+        time: formattedTime || null,
         day: selectedDay,
         cost: Number(form.cost) || 0,
         duration: Number(form.duration) || 0,
@@ -600,8 +606,14 @@ export default function TripDetail() {
     if (!editingActivity || !form.title) return;
     setIsSaving(true);
     try {
+      let formattedTime = form.time;
+      if (form.time && /^\d:\d{2}$/.test(form.time)) {
+        formattedTime = `0${form.time}`;
+      }
+
       await updateActivity(editingActivity.id!, {
         ...form,
+        time: formattedTime || null,
         cost: Number(form.cost) || 0,
         duration: Number(form.duration) || 0,
         isBackup: form.isBackup,
@@ -849,6 +861,18 @@ export default function TripDetail() {
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
 
+            <div className="flex items-center space-x-2 p-4 bg-orange-50 rounded-2xl border border-orange-100">
+              <input 
+                type="checkbox" 
+                id="isBackup" 
+                checked={form.isBackup} 
+                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })}
+                className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
+              />
+              <Label htmlFor="isBackup" className="text-sm font-bold text-orange-700 cursor-pointer">
+                設為 Plan B 備案活動
+              </Label>
+            </div>
           </div>
           <div className="p-8 pt-0 flex gap-3"><Button variant="outline" onClick={() => setShowAddActivity(false)} className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</Button><Button onClick={editingActivity ? handleUpdateActivity : handleCreateActivity} disabled={isSaving || !form.title} className="flex-1 h-12 rounded-xl bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] text-white">{isSaving ? "儲存中..." : (editingActivity ? "更新活動" : "新增活動")}</Button></div>
         </DialogContent>
