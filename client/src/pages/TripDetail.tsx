@@ -502,12 +502,8 @@ export default function TripDetail() {
     [activitiesByDay, selectedDay]
   );
 
-  const { mainActivities, backupActivities } = useMemo(() => {
-    const sorted = [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    return {
-      mainActivities: sorted.filter(a => !a.isBackup),
-      backupActivities: sorted.filter(a => a.isBackup)
-    };
+  const mainActivities = useMemo(() => {
+    return [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [currentDayActivities]);
 
   const totalCost = activities.reduce((sum, a) => sum + Number(a.cost || 0), 0);
@@ -535,15 +531,12 @@ export default function TripDetail() {
     })).filter(s => s.value > 0);
   }, [activities, activitiesByDay]);
 
-  const handleMoveActivity = async (index: number, direction: 'up' | 'down', isBackup: boolean) => {
+  const handleMoveActivity = async (index: number, direction: 'up' | 'down') => {
     if (!tripId) return;
-    
-    const targetList = isBackup ? backupActivities : mainActivities;
+    const newItems = [...mainActivities];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    
-    if (targetIndex < 0 || targetIndex >= targetList.length) return;
+    if (targetIndex < 0 || targetIndex >= newItems.length) return;
 
-    const newItems = [...targetList];
     const temp = newItems[index];
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
@@ -821,28 +814,11 @@ export default function TripDetail() {
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
               {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
-                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === mainActivities.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up', false)} onMoveDown={() => handleMoveActivity(idx, 'down', false)} />
+                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === mainActivities.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [] }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up')} onMoveDown={() => handleMoveActivity(idx, 'down')} />
               )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
             </div>
 
-            {backupActivities.length > 0 && (
-              <div className="mt-12">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent to-orange-200" />
-                  <span className="text-xs font-bold text-orange-500 uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
-                    Plan B 備案行程
-                  </span>
-                  <div className="h-px flex-1 bg-gradient-to-l from-transparent to-orange-200" />
-                </div>
-                <div className="space-y-4">
-                  {backupActivities.map((activity, idx) => (
-                    <div key={activity.id} className="opacity-80 hover:opacity-100 transition-opacity">
-                      <ActivityCard activity={activity} index={idx} isFirst={idx === 0} isLast={idx === backupActivities.length - 1} currency={trip.currency} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up', true)} onMoveDown={() => handleMoveActivity(idx, 'down', true)} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+
           </div>
         </main>
 
@@ -857,16 +833,7 @@ export default function TripDetail() {
             <DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
               {editingActivity ? "編輯活動" : "新增活動"}
             </DialogTitle>
-            <div className="flex items-center space-x-2 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100">
-              <input 
-                type="checkbox" 
-                id="isBackup" 
-                checked={form.isBackup} 
-                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })} 
-                className="w-3.5 h-3.5 text-orange-500 rounded border-gray-300 focus:ring-orange-500" 
-              />
-              <Label htmlFor="isBackup" className="text-xs font-bold text-orange-700 cursor-pointer whitespace-nowrap">Plan B 備案</Label>
-            </div>
+
           </DialogHeader>
           <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱</Label><Input placeholder="要去哪裡？" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)]" /></div>

@@ -21,7 +21,6 @@ const activitySchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   images: z.array(z.string().url()).max(5).optional().default([]),
   sortOrder: z.number().int().default(0),
-  isBackup: z.boolean().default(false),
 });
 
 /**
@@ -76,43 +75,22 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, isBackup, ...rest } = parsed.data;
-  
-  // 建立基礎資料物件（不含可能導致報錯的 isBackup）
-  const baseData: any = {
-    ...rest,
-    tripId,
-    date: date ? new Date(date) : null,
-    lat: lat ?? null,
-    lng: lng ?? null,
-    cost: cost ?? null,
-  };
-
+  const { date, lat, lng, cost, ...rest } = parsed.data;
   try {
-    // 先嘗試包含 isBackup
     const activity = await prisma.activity.create({
       data: {
-        ...baseData,
-        isBackup: isBackup ?? false
+        ...rest,
+        tripId,
+        date: date ? new Date(date) : null,
+        lat: lat ?? null,
+        lng: lng ?? null,
+        cost: cost ?? null,
       },
     });
     res.status(201).json({ activity });
   } catch (err: any) {
-    console.warn("[Activity Create Warning]: Initial attempt failed, trying compatible mode...", err.message);
-    
-    try {
-      // 如果失敗，完全剔除 isBackup 欄位再試一次
-      const activity = await prisma.activity.create({
-        data: baseData,
-      });
-      res.status(201).json({ activity });
-    } catch (retryErr: any) {
-      console.error("[Activity Create Fatal Error]:", retryErr);
-      res.status(500).json({ 
-        error: "新增活動失敗", 
-        details: retryErr.message 
-      });
-    }
+    console.error("[Activity Create Error]:", err);
+    res.status(500).json({ error: "新增活動失敗", details: err.message });
   }
 });
 
