@@ -75,11 +75,19 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, ...rest } = parsed.data;
+  const { date, lat, lng, cost, time, ...rest } = parsed.data;
+  
+  // 處理時間格式，確保符合 HH:MM (例如 09:00 而非 9:00)
+  let formattedTime = time;
+  if (time && /^\d:\d{2}$/.test(time)) {
+    formattedTime = `0${time}`;
+  }
+
   const activity = await prisma.activity.create({
     data: {
       ...rest,
       tripId,
+      time: formattedTime ?? null,
       date: date ? new Date(date) : null,
       lat: lat ?? null,
       lng: lng ?? null,
@@ -144,11 +152,19 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, ...rest } = parsed.data;
+  const { date, lat, lng, cost, time, ...rest } = parsed.data;
+
+  // 處理時間格式，確保符合 HH:MM (例如 09:00 而非 9:00)
+  let formattedTime = time;
+  if (time && /^\d:\d{2}$/.test(time)) {
+    formattedTime = `0${time}`;
+  }
+
   const updated = await prisma.activity.update({
     where: { id: req.params.id },
     data: {
       ...rest,
+      ...(time !== undefined ? { time: formattedTime ?? null } : {}),
       ...(date !== undefined ? { date: date ? new Date(date) : null } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
