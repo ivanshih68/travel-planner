@@ -76,50 +76,43 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, ...rest } = parsed.data;
+  const { date, lat, lng, cost, isBackup, ...rest } = parsed.data;
+  
+  // 建立基礎資料物件（不含可能導致報錯的 isBackup）
+  const baseData: any = {
+    ...rest,
+    tripId,
+    date: date ? new Date(date) : null,
+    lat: lat ?? null,
+    lng: lng ?? null,
+    cost: cost ?? null,
+  };
+
   try {
-    // 嘗試正常儲存（包含 isBackup）
+    // 先嘗試包含 isBackup
     const activity = await prisma.activity.create({
       data: {
-        ...rest,
-        tripId,
-        date: date ? new Date(date) : null,
-        lat: lat ?? null,
-        lng: lng ?? null,
-        cost: cost ?? null,
+        ...baseData,
+        isBackup: isBackup ?? false
       },
     });
     res.status(201).json({ activity });
   } catch (err: any) {
-    console.error("[Activity Create Error]:", err);
+    console.warn("[Activity Create Warning]: Initial attempt failed, trying compatible mode...", err.message);
     
-    // 如果錯誤碼是 P2002 (欄位不存在) 或類似錯誤，嘗試降級儲存（不含 isBackup）
-    // 這樣至少正選行程可以正常運作
-    if (err.message?.includes("isBackup") || err.code === 'P2002' || err.code === 'P2025') {
-      console.warn("[Database Compatibility]: isBackup column missing, retrying without it...");
-      try {
-        const { isBackup, ...compatibleData } = rest;
-        const activity = await prisma.activity.create({
-          data: {
-            ...compatibleData,
-            tripId,
-            date: date ? new Date(date) : null,
-            lat: lat ?? null,
-            lng: lng ?? null,
-            cost: cost ?? null,
-          },
-        });
-        res.status(201).json({ activity });
-        return;
-      } catch (retryErr: any) {
-        console.error("[Activity Retry Error]:", retryErr);
-      }
+    try {
+      // 如果失敗，完全剔除 isBackup 欄位再試一次
+      const activity = await prisma.activity.create({
+        data: baseData,
+      });
+      res.status(201).json({ activity });
+    } catch (retryErr: any) {
+      console.error("[Activity Create Fatal Error]:", retryErr);
+      res.status(500).json({ 
+        error: "新增活動失敗", 
+        details: retryErr.message 
+      });
     }
-
-    res.status(500).json({ 
-      error: "新增活動失敗，請確認資料庫是否已同步 (npx prisma db push)", 
-      details: err.message
-    });
   }
 });
 
