@@ -81,6 +81,7 @@ interface ActivityForm {
   lat?: number;
   lng?: number;
   images: string[];
+  isBackup: boolean;
 }
 
 const defaultActivityForm: ActivityForm = {
@@ -95,6 +96,7 @@ const defaultActivityForm: ActivityForm = {
   lat: undefined,
   lng: undefined,
   images: [],
+  isBackup: false,
 };
 
 // --- Helper Components ---
@@ -500,8 +502,12 @@ export default function TripDetail() {
     [activitiesByDay, selectedDay]
   );
 
-  const sortedItems = useMemo(() => {
-    return [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const { mainActivities, backupActivities } = useMemo(() => {
+    const sorted = [...currentDayActivities].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    return {
+      mainActivities: sorted.filter(a => !a.isBackup),
+      backupActivities: sorted.filter(a => a.isBackup)
+    };
   }, [currentDayActivities]);
 
   const totalCost = activities.reduce((sum, a) => sum + Number(a.cost || 0), 0);
@@ -567,9 +573,9 @@ export default function TripDetail() {
     return ids;
   }, [activities]);
 
-  const openAddActivity = () => {
+  const openAddActivity = (isBackup = false) => {
     setEditingActivity(null);
-    setForm({ ...defaultActivityForm, time: "10:00" });
+    setForm({ ...defaultActivityForm, isBackup });
     setShowAddActivity(true);
   };
 
@@ -582,7 +588,8 @@ export default function TripDetail() {
         day: selectedDay,
         cost: Number(form.cost) || 0,
         duration: Number(form.duration) || 0,
-        sortOrder: sortedItems.length
+        sortOrder: mainActivities.length,
+        isBackup: form.isBackup
       });
       setShowAddActivity(false);
       toast.success("活動已新增");
@@ -601,6 +608,7 @@ export default function TripDetail() {
         ...form,
         cost: Number(form.cost) || 0,
         duration: Number(form.duration) || 0,
+        isBackup: form.isBackup,
       });
       setShowAddActivity(false);
       toast.success("活動已更新");
@@ -803,16 +811,35 @@ export default function TripDetail() {
                 </h2>
               </div>
               <div className="hidden lg:flex flex-col gap-2">
-                <Button variant="outline" onClick={() => toast.info("備案功能開發中...")} className="rounded-full border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)] hover:bg-gray-50"><Plus className="w-4 h-4 mr-2" /> 新增備案</Button>
-                <Button onClick={openAddActivity} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
+                <Button variant="outline" onClick={() => openAddActivity(true)} className="rounded-full border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)] hover:bg-gray-50"><Plus className="w-4 h-4 mr-2" /> 新增備案</Button>
+                <Button onClick={() => openAddActivity(false)} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
               </div>
             </div>
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
-              {sortedItems.length > 0 ? sortedItems.map((activity, idx) => (
-                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === sortedItems.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [] }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up')} onMoveDown={() => handleMoveActivity(idx, 'down')} />
-              )) : <DayEmptyState onAdd={openAddActivity} />}
+              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
+                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === mainActivities.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up')} onMoveDown={() => handleMoveActivity(idx, 'down')} />
+              )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
             </div>
+
+            {backupActivities.length > 0 && (
+              <div className="mt-12">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent to-orange-200" />
+                  <span className="text-xs font-bold text-orange-500 uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
+                    Plan B 備案行程
+                  </span>
+                  <div className="h-px flex-1 bg-gradient-to-l from-transparent to-orange-200" />
+                </div>
+                <div className="space-y-4">
+                  {backupActivities.map((activity, idx) => (
+                    <div key={activity.id} className="opacity-80 hover:opacity-100 transition-opacity">
+                      <ActivityCard activity={activity} index={idx} isFirst={idx === 0} isLast={idx === backupActivities.length - 1} currency={trip.currency} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => {}} onMoveDown={() => {}} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </main>
 
@@ -837,6 +864,10 @@ export default function TripDetail() {
             </div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
+            <div className="flex items-center space-x-2 bg-orange-50 p-4 rounded-2xl border border-orange-100">
+              <input type="checkbox" id="isBackup" checked={form.isBackup} onChange={(e) => setForm({ ...form, isBackup: e.target.checked })} className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500" />
+              <Label htmlFor="isBackup" className="text-sm font-bold text-orange-700 cursor-pointer">設為 Plan B 備案活動</Label>
+            </div>
           </div>
           <div className="p-8 pt-0 flex gap-3"><Button variant="outline" onClick={() => setShowAddActivity(false)} className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</Button><Button onClick={editingActivity ? handleUpdateActivity : handleCreateActivity} disabled={isSaving || !form.title} className="flex-1 h-12 rounded-xl bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] text-white">{isSaving ? "儲存中..." : (editingActivity ? "更新活動" : "新增活動")}</Button></div>
         </DialogContent>

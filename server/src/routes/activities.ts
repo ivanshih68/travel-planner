@@ -21,6 +21,7 @@ const activitySchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   images: z.array(z.string().url()).max(5).optional().default([]),
   sortOrder: z.number().int().default(0),
+  isBackup: z.boolean().default(false),
 });
 
 /**
