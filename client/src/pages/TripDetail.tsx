@@ -853,7 +853,21 @@ export default function TripDetail() {
 
       <Dialog open={showAddActivity} onOpenChange={setShowAddActivity}>
         <DialogContent className="bg-white sm:max-w-lg rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 pb-0"><DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">{editingActivity ? "編輯活動" : "新增活動"}</DialogTitle></DialogHeader>
+          <DialogHeader className="p-8 pb-0 flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
+              {editingActivity ? "編輯活動" : "新增活動"}
+            </DialogTitle>
+            <div className="flex items-center space-x-2 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100">
+              <input 
+                type="checkbox" 
+                id="isBackup" 
+                checked={form.isBackup} 
+                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })} 
+                className="w-3.5 h-3.5 text-orange-500 rounded border-gray-300 focus:ring-orange-500" 
+              />
+              <Label htmlFor="isBackup" className="text-xs font-bold text-orange-700 cursor-pointer whitespace-nowrap">Plan B 備案</Label>
+            </div>
+          </DialogHeader>
           <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱</Label><Input placeholder="要去哪裡？" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)]" /></div>
             <div className="grid grid-cols-2 gap-4">
@@ -867,10 +881,7 @@ export default function TripDetail() {
             </div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
-            <div className="flex items-center space-x-2 bg-orange-50 p-4 rounded-2xl border border-orange-100">
-              <input type="checkbox" id="isBackup" checked={form.isBackup} onChange={(e) => setForm({ ...form, isBackup: e.target.checked })} className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500" />
-              <Label htmlFor="isBackup" className="text-sm font-bold text-orange-700 cursor-pointer">設為 Plan B 備案活動</Label>
-            </div>
+
           </div>
           <div className="p-8 pt-0 flex gap-3"><Button variant="outline" onClick={() => setShowAddActivity(false)} className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</Button><Button onClick={editingActivity ? handleUpdateActivity : handleCreateActivity} disabled={isSaving || !form.title} className="flex-1 h-12 rounded-xl bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] text-white">{isSaving ? "儲存中..." : (editingActivity ? "更新活動" : "新增活動")}</Button></div>
         </DialogContent>
