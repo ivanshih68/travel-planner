@@ -77,17 +77,26 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   }
 
   const { date, lat, lng, cost, ...rest } = parsed.data;
-  const activity = await prisma.activity.create({
-    data: {
-      ...rest,
-      tripId,
-      date: date ? new Date(date) : null,
-      lat: lat ?? null,
-      lng: lng ?? null,
-      cost: cost ?? null,
-    },
-  });
-  res.status(201).json({ activity });
+  try {
+    const activity = await prisma.activity.create({
+      data: {
+        ...rest,
+        tripId,
+        date: date ? new Date(date) : null,
+        lat: lat ?? null,
+        lng: lng ?? null,
+        cost: cost ?? null,
+      },
+    });
+    res.status(201).json({ activity });
+  } catch (err: any) {
+    console.error("[Activity Create Error]:", err);
+    res.status(500).json({ 
+      error: "新增活動失敗", 
+      details: err.message,
+      code: err.code // Prisma 錯誤碼
+    });
+  }
 });
 
 // ── PATCH /api/trips/:tripId/activities/reorder ──────────
