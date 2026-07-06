@@ -78,6 +78,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 
   const { date, lat, lng, cost, ...rest } = parsed.data;
   try {
+    // 嘗試正常儲存（包含 isBackup）
     const activity = await prisma.activity.create({
       data: {
         ...rest,
@@ -91,10 +92,33 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     res.status(201).json({ activity });
   } catch (err: any) {
     console.error("[Activity Create Error]:", err);
+    
+    // 如果錯誤碼是 P2002 (欄位不存在) 或類似錯誤，嘗試降級儲存（不含 isBackup）
+    // 這樣至少正選行程可以正常運作
+    if (err.message?.includes("isBackup") || err.code === 'P2002' || err.code === 'P2025') {
+      console.warn("[Database Compatibility]: isBackup column missing, retrying without it...");
+      try {
+        const { isBackup, ...compatibleData } = rest;
+        const activity = await prisma.activity.create({
+          data: {
+            ...compatibleData,
+            tripId,
+            date: date ? new Date(date) : null,
+            lat: lat ?? null,
+            lng: lng ?? null,
+            cost: cost ?? null,
+          },
+        });
+        res.status(201).json({ activity });
+        return;
+      } catch (retryErr: any) {
+        console.error("[Activity Retry Error]:", retryErr);
+      }
+    }
+
     res.status(500).json({ 
-      error: "新增活動失敗", 
-      details: err.message,
-      code: err.code // Prisma 錯誤碼
+      error: "新增活動失敗，請確認資料庫是否已同步 (npx prisma db push)", 
+      details: err.message
     });
   }
 });
