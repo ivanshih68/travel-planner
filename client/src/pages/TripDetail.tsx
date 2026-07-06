@@ -535,12 +535,15 @@ export default function TripDetail() {
     })).filter(s => s.value > 0);
   }, [activities, activitiesByDay]);
 
-  const handleMoveActivity = async (index: number, direction: 'up' | 'down') => {
+  const handleMoveActivity = async (index: number, direction: 'up' | 'down', isBackup: boolean) => {
     if (!tripId) return;
-    const newItems = [...sortedItems];
+    
+    const targetList = isBackup ? backupActivities : mainActivities;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newItems.length) return;
+    
+    if (targetIndex < 0 || targetIndex >= targetList.length) return;
 
+    const newItems = [...targetList];
     const temp = newItems[index];
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
@@ -818,7 +821,7 @@ export default function TripDetail() {
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
               {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
-                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === mainActivities.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up')} onMoveDown={() => handleMoveActivity(idx, 'down')} />
+                <ActivityCard key={activity.id} activity={activity} index={idx} isFirst={idx === 0} isLast={idx === mainActivities.length - 1} currency={trip.currency} hasConflict={conflictingIds.has(activity.id!)} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up', false)} onMoveDown={() => handleMoveActivity(idx, 'down', false)} />
               )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
             </div>
 
@@ -834,7 +837,7 @@ export default function TripDetail() {
                 <div className="space-y-4">
                   {backupActivities.map((activity, idx) => (
                     <div key={activity.id} className="opacity-80 hover:opacity-100 transition-opacity">
-                      <ActivityCard activity={activity} index={idx} isFirst={idx === 0} isLast={idx === backupActivities.length - 1} currency={trip.currency} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => {}} onMoveDown={() => {}} />
+                      <ActivityCard activity={activity} index={idx} isFirst={idx === 0} isLast={idx === backupActivities.length - 1} currency={trip.currency} onEdit={() => { setEditingActivity(activity); setForm({ title: activity.title, category: activity.category, time: activity.time || "", location: activity.location || "", address: activity.address || "", notes: activity.notes || "", cost: activity.cost?.toString() || "", duration: activity.duration?.toString() || "", lat: (activity as any).lat, lng: (activity as any).lng, images: activity.images || [], isBackup: activity.isBackup }); setShowAddActivity(true); }} onDelete={() => setDeletingActivity(activity)} onMoveUp={() => handleMoveActivity(idx, 'up', true)} onMoveDown={() => handleMoveActivity(idx, 'down', true)} />
                     </div>
                   ))}
                 </div>
