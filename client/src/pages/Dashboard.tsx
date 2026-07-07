@@ -351,7 +351,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
                 {sharedTrips.map((shared, index) => (
                   <div key={shared.id} className="relative group bg-white rounded-2xl overflow-hidden shadow-sm border border-[oklch(0.92_0.008_220)] hover:shadow-lg transition-all duration-200 cursor-pointer">
-                    <div onClick={() => setLocation(`/trip/${shared.trip.id}`)}>
+                    <div onClick={() => setLocation(`/trip/${shared.id}`)}>
                       <div className="h-44 overflow-hidden relative">
                         <img 
                           src={shared.trip.coverImage || CARD_IMAGES[(index + 2) % CARD_IMAGES.length]} 
