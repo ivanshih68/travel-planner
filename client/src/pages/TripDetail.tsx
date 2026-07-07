@@ -81,7 +81,7 @@ interface ActivityForm {
   lat?: number;
   lng?: number;
   images: string[];
-
+  isBackup: boolean;
 }
 
 const defaultActivityForm: ActivityForm = {
@@ -96,7 +96,7 @@ const defaultActivityForm: ActivityForm = {
   lat: undefined,
   lng: undefined,
   images: [],
-
+  isBackup: false,
 };
 
 // --- Helper Components ---
@@ -571,7 +571,7 @@ export default function TripDetail() {
 
   const openAddActivity = (isBackup = false) => {
     setEditingActivity(null);
-    setForm({ ...defaultActivityForm });
+    setForm({ ...defaultActivityForm, isBackup });
     setShowAddActivity(true);
   };
 
@@ -591,7 +591,7 @@ export default function TripDetail() {
         cost: form.cost === "" ? null : Number(form.cost),
         duration: form.duration === "" ? null : Number(form.duration),
         sortOrder: mainActivities.length,
-
+        isBackup: form.isBackup
       });
       setShowAddActivity(false);
       toast.success("活動已新增");
@@ -616,6 +616,7 @@ export default function TripDetail() {
         time: formattedTime || null,
         cost: form.cost === "" ? null : Number(form.cost),
         duration: form.duration === "" ? null : Number(form.duration),
+        isBackup: form.isBackup,
       });
       setShowAddActivity(false);
       toast.success("活動已更新");
@@ -845,7 +846,8 @@ export default function TripDetail() {
                       duration: activity.duration?.toString() || "", 
                       lat: (activity as any).lat, 
                       lng: (activity as any).lng, 
-                      images: activity.images || []
+                      images: activity.images || [],
+                      isBackup: activity.isBackup || false
                     }); 
                     setShowAddActivity(true); 
                   }} 
@@ -853,7 +855,7 @@ export default function TripDetail() {
                   onMoveUp={() => handleMoveActivity(idx, 'up')} 
                   onMoveDown={() => handleMoveActivity(idx, 'down')} 
                 />
-              )) : <DayEmptyState onAdd={openAddActivity} />}
+              )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
             </div>
 
 
@@ -871,7 +873,18 @@ export default function TripDetail() {
             <DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
               {editingActivity ? "編輯活動" : `新增活動 - Day ${selectedDay}`}
             </DialogTitle>
-
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-orange-50 rounded-xl border border-orange-100">
+              <input 
+                type="checkbox" 
+                id="isBackup" 
+                checked={form.isBackup} 
+                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })}
+                className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+              />
+              <Label htmlFor="isBackup" className="text-xs font-bold text-orange-700 cursor-pointer whitespace-nowrap">
+                設為 Plan B 的備案活動
+              </Label>
+            </div>
           </DialogHeader>
           <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="space-y-1.5">
