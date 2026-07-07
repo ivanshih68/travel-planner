@@ -616,7 +616,6 @@ export default function TripDetail() {
         time: formattedTime || null,
         cost: form.cost === "" ? null : Number(form.cost),
         duration: form.duration === "" ? null : Number(form.duration),
-,
       });
       setShowAddActivity(false);
       toast.success("活動已更新");
@@ -824,37 +823,36 @@ export default function TripDetail() {
             </div>
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
-              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => {
-                return (
-                  <ActivityCard 
-                      activity={activity} 
-                      index={idx} 
-                      isFirst={idx === 0} 
-                      isLast={idx === mainActivities.length - 1} 
-                      currency={trip.currency} 
-                      hasConflict={conflictingIds.has(activity.id!)} 
-                      onEdit={() => { 
-                        setEditingActivity(activity); 
-                        setForm({ 
-                          title: activity.title, 
-                          category: activity.category, 
-                          time: activity.time || "", 
-                          location: activity.location || "", 
-                          address: activity.address || "", 
-                          notes: activity.notes || "", 
-                          cost: activity.cost?.toString() || "", 
-                          duration: activity.duration?.toString() || "", 
-                          lat: (activity as any).lat, 
-                          lng: (activity as any).lng, 
-                          images: activity.images || []
-                        }); 
-                        setShowAddActivity(true); 
-                      }} 
-                      onDelete={() => setDeletingActivity(activity)} 
-                      onMoveUp={() => handleMoveActivity(idx, 'up')} 
-                      onMoveDown={() => handleMoveActivity(idx, 'down')} 
-                    />
-
+              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
+                <ActivityCard 
+                  key={activity.id}
+                  activity={activity} 
+                  index={idx} 
+                  isFirst={idx === 0} 
+                  isLast={idx === mainActivities.length - 1} 
+                  currency={trip.currency} 
+                  hasConflict={conflictingIds.has(activity.id!)} 
+                  onEdit={() => { 
+                    setEditingActivity(activity); 
+                    setForm({ 
+                      title: activity.title, 
+                      category: activity.category, 
+                      time: activity.time || "", 
+                      location: activity.location || "", 
+                      address: activity.address || "", 
+                      notes: activity.notes || "", 
+                      cost: activity.cost?.toString() || "", 
+                      duration: activity.duration?.toString() || "", 
+                      lat: (activity as any).lat, 
+                      lng: (activity as any).lng, 
+                      images: activity.images || []
+                    }); 
+                    setShowAddActivity(true); 
+                  }} 
+                  onDelete={() => setDeletingActivity(activity)} 
+                  onMoveUp={() => handleMoveActivity(idx, 'up')} 
+                  onMoveDown={() => handleMoveActivity(idx, 'down')} 
+                />
               )) : <DayEmptyState onAdd={openAddActivity} />}
             </div>
 
@@ -902,10 +900,7 @@ export default function TripDetail() {
               <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預計時長 (分鐘)</Label><Input type="number" placeholder="60" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             </div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." initialValue={form.location} /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預計時長 (分鐘)</Label><Input type="number" placeholder="60" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
-              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預估花費 ({trip.currency})</Label><Input type="number" placeholder="0" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
-            </div>
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預估花費 ({trip.currency})</Label><Input type="number" placeholder="0" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
           </div>
