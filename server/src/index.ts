@@ -3,7 +3,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-dotenv.config();
+import path from "path";
+dotenv.config({ path: path.resolve(process.cwd(), "..", ".env") });
+dotenv.config(); // 同時嘗試載入當前目錄下的 .env
 
 import authRouter from "./routes/auth";
 import tripsRouter from "./routes/trips";
