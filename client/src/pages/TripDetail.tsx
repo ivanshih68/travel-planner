@@ -81,7 +81,7 @@ interface ActivityForm {
   lat?: number;
   lng?: number;
   images: string[];
-  isBackup: boolean;
+
 }
 
 const defaultActivityForm: ActivityForm = {
@@ -96,7 +96,7 @@ const defaultActivityForm: ActivityForm = {
   lat: undefined,
   lng: undefined,
   images: [],
-  isBackup: false,
+
 };
 
 // --- Helper Components ---
@@ -571,7 +571,7 @@ export default function TripDetail() {
 
   const openAddActivity = (isBackup = false) => {
     setEditingActivity(null);
-    setForm({ ...defaultActivityForm, isBackup });
+    setForm({ ...defaultActivityForm });
     setShowAddActivity(true);
   };
 
@@ -591,7 +591,7 @@ export default function TripDetail() {
         cost: form.cost === "" ? null : Number(form.cost),
         duration: form.duration === "" ? null : Number(form.duration),
         sortOrder: mainActivities.length,
-        isBackup: form.isBackup
+
       });
       setShowAddActivity(false);
       toast.success("活動已新增");
@@ -616,7 +616,7 @@ export default function TripDetail() {
         time: formattedTime || null,
         cost: form.cost === "" ? null : Number(form.cost),
         duration: form.duration === "" ? null : Number(form.duration),
-        isBackup: form.isBackup,
+,
       });
       setShowAddActivity(false);
       toast.success("活動已更新");
@@ -825,24 +825,8 @@ export default function TripDetail() {
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
               {mainActivities.length > 0 ? mainActivities.map((activity, idx) => {
-                const isPlanB = activity.isBackup;
-                const prevIsMain = idx > 0 && !mainActivities[idx - 1].isBackup;
-                const showSeparator = isPlanB && prevIsMain;
-
                 return (
-                  <div key={activity.id} className="space-y-6">
-                    {showSeparator && (
-                      <div className="relative py-8 flex items-center">
-                        <div className="flex-1 flex items-center gap-2">
-                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
-                          <span className="text-xs font-bold tracking-widest text-red-500/80 px-4">
-                            以下為行程備案
-                          </span>
-                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
-                        </div>
-                      </div>
-                    )}
-                    <ActivityCard 
+                  <ActivityCard 
                       activity={activity} 
                       index={idx} 
                       isFirst={idx === 0} 
@@ -862,8 +846,7 @@ export default function TripDetail() {
                           duration: activity.duration?.toString() || "", 
                           lat: (activity as any).lat, 
                           lng: (activity as any).lng, 
-                          images: activity.images || [],
-                          isBackup: activity.isBackup || false
+                          images: activity.images || []
                         }); 
                         setShowAddActivity(true); 
                       }} 
@@ -871,9 +854,8 @@ export default function TripDetail() {
                       onMoveUp={() => handleMoveActivity(idx, 'up')} 
                       onMoveDown={() => handleMoveActivity(idx, 'down')} 
                     />
-                  </div>
-                );
-              }) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
+
+              )) : <DayEmptyState onAdd={openAddActivity} />}
             </div>
 
 
@@ -889,26 +871,35 @@ export default function TripDetail() {
         <DialogContent className="bg-white sm:max-w-lg rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-8 pb-0 flex-row items-center justify-between space-y-0">
             <DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
-              {editingActivity ? "編輯活動" : "新增活動"}
+              {editingActivity ? "編輯活動" : `新增活動 - Day ${selectedDay}`}
             </DialogTitle>
-            <div className="flex items-center space-x-2 px-3 py-1.5 bg-orange-50 rounded-xl border border-orange-100">
-              <input 
-                type="checkbox" 
-                id="isBackup" 
-                checked={form.isBackup} 
-                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })}
-                className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-              />
-              <Label htmlFor="isBackup" className="text-xs font-bold text-orange-700 cursor-pointer whitespace-nowrap">
-                設為 Plan B 的備案活動
-              </Label>
-            </div>
+
           </DialogHeader>
           <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱</Label><Input placeholder="要去哪裡？" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)]" /></div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動類型</Label>
+              <div className="flex gap-2 flex-wrap">
+                {Object.entries(categoryConfig).map(([key, cfg]) => {
+                  const Icon = cfg.icon;
+                  const isSelected = form.category === key;
+                  return (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      className={`h-12 rounded-xl border-2 ${isSelected ? "border-[oklch(0.62_0.12_220)] text-[oklch(0.22_0.08_220)] bg-[oklch(0.95_0.005_220)]" : "border-[oklch(0.88_0.008_220)] text-[oklch(0.45_0.05_220)]"}`}
+                      onClick={() => setForm({ ...form, category: key as Activity["category"] })}
+                    >
+                      <Icon className="w-5 h-5 mr-2" />
+                      {cfg.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱</Label><Input placeholder="例如: 東京鐵塔、築地市場..." value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)]" /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">類別</Label><Select value={form.category} onValueChange={(val: any) => setForm({ ...form, category: val })}><SelectTrigger className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(categoryConfig).map(([key, cfg]) => <SelectItem key={key} value={key}>{cfg.label}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">時間</Label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
+              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">開始時間</Label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
+              <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預計時長 (分鐘)</Label><Input type="number" placeholder="60" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             </div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." initialValue={form.location} /></div>
             <div className="grid grid-cols-2 gap-4">
