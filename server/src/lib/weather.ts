@@ -22,7 +22,7 @@ export async function getWeatherData(destination: string, targetDate: string): P
     // 1. Get coordinates for the destination
     const geoUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(destination)}&limit=1&appid=${apiKey}`;
     const geoRes = await fetch(geoUrl);
-    const geoData = await geoRes.json();
+    const geoData = (await geoRes.json()) as any[];
 
     if (!geoData || geoData.length === 0) {
       console.warn(`[Weather] Could not find coordinates for: ${destination}`);
@@ -34,7 +34,7 @@ export async function getWeatherData(destination: string, targetDate: string): P
     // 2. Get 5-day forecast (OpenWeather free tier limitation)
     const weatherUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
     const weatherRes = await fetch(weatherUrl);
-    const weatherData = await weatherRes.json();
+    const weatherData = (await weatherRes.json()) as any;
 
     if (!weatherData || !weatherData.list) return null;
 
