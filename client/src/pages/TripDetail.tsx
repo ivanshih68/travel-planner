@@ -882,7 +882,7 @@ export default function TripDetail() {
                 className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
               />
               <Label htmlFor="isBackup" className="text-xs font-bold text-orange-700 cursor-pointer whitespace-nowrap">
-                設為 Plan B 的備案活動
+                設置為行程備案
               </Label>
             </div>
           </DialogHeader>
