@@ -4,20 +4,21 @@
 export async function fetchUnsplashCoverImage(destination: string): Promise<string | null> {
   console.log(`[Unsplash Debug] 開始抓取圖片，目的地: ${destination}`);
   try {
-    const accessKey = process.env.UNSPLASH_ACCESS_KEY || process.env.VITE_UNSPLASH_ACCESS_KEY;
+    const accessKey = process.env.UNSPLASH_ACCESS_KEY;
     
-    // 檢查金鑰是否存在（僅顯示前 4 碼以示安全）
     if (!accessKey) {
       console.error('[Unsplash Debug] 錯誤: 找不到 UNSPLASH_ACCESS_KEY 環境變數');
       return null;
     }
     console.log(`[Unsplash Debug] 使用金鑰前綴: ${accessKey.substring(0, 4)}...`);
 
-    const queryText = `${destination} travel scenery landscape`;
-    const query = encodeURIComponent(queryText);
-    const url = `https://api.unsplash.com/search/photos?query=${query}&per_page=1&orientation=landscape&client_id=${accessKey}`;
+    // 💡 最佳實踐：直接使用目的地作為關鍵字，精準度最高
+    const query = encodeURIComponent(destination.trim());
     
-    console.log(`[Unsplash Debug] 請求 URL: https://api.unsplash.com/search/photos?query=${queryText}...`);
+    // 💡 最佳實踐：使用 /photos/random 並帶入 query，確保圖片符合地點且每次不重複
+    const url = `https://api.unsplash.com/photos/random?query=${query}&orientation=landscape&client_id=${accessKey}`;
+    
+    console.log(`[Unsplash Debug] 請求 URL: https://api.unsplash.com/photos/random?query=${destination}`);
     
     const response = await fetch(url);
     
@@ -27,8 +28,10 @@ export async function fetchUnsplashCoverImage(destination: string): Promise<stri
       return null;
     }
 
-    const data = await response.json();
-    const imageUrl = data.results?.[0]?.urls?.regular;
+    const data = (await response.json()) as any;
+    
+    // 注意：random API 回傳的是單一物件，所以直接取 data.urls.regular
+    const imageUrl = data?.urls?.regular;
     
     if (imageUrl) {
       console.log(`[Unsplash Debug] 成功抓取圖片: ${imageUrl}`);
