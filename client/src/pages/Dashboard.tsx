@@ -326,7 +326,7 @@ export default function Dashboard() {
 
         <div className="p-4 lg:p-8">
            {loading ? <Skeleton className="h-72 w-full rounded-2xl" /> : (
-            <<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
   {filteredTrips.map((trip, index) => {
     // 【關鍵修改】：檢查 trip 是否存在且擁有有效的 id
     if (!trip || !trip.id) {
