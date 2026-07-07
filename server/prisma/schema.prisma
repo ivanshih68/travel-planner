@@ -66,6 +66,7 @@ model Activity {
   notes     String?
   images    String[]         @default([])
   sortOrder Int              @default(0) @map("sort_order")
+  isBackup  Boolean          @default(false) @map("is_backup")
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
 

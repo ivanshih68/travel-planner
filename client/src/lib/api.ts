@@ -84,6 +84,7 @@ export interface Activity {
   notes: string | null;
   images: string[];
   sortOrder: number;
+  isBackup: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -176,6 +177,7 @@ export const activitiesApi = {
       notes?: string;
       images?: string[];
       sortOrder?: number;
+      isBackup?: boolean;
     }
   ) =>
     api.post<{ activity: Activity }>(

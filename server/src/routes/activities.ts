@@ -12,7 +12,7 @@ const activitySchema = z.object({
   title: z.string().min(1, "活動名稱不能為空").max(100),
   category: z.enum(["ATTRACTION", "RESTAURANT", "HOTEL", "TRANSPORT", "OTHER"]),
   time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-  duration: z.number().int().positive().optional().nullable(),
+  duration: z.number().int().min(0).optional().nullable(),
   location: z.string().max(200).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   lat: z.number().optional().nullable(),
@@ -21,6 +21,7 @@ const activitySchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   images: z.array(z.string().url()).max(5).optional().default([]),
   sortOrder: z.number().int().default(0),
+  isBackup: z.boolean().default(false),
 });
 
 /**
@@ -75,7 +76,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, time, ...rest } = parsed.data;
+  const { date, lat, lng, cost, time, isBackup, ...rest } = parsed.data;
   
   // 處理時間格式，確保符合 HH:MM (例如 09:00 而非 9:00)
   let formattedTime = time;
@@ -83,18 +84,25 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     formattedTime = `0${time}`;
   }
 
-  const activity = await prisma.activity.create({
-    data: {
-      ...rest,
-      tripId,
-      time: formattedTime ?? null,
-      date: date ? new Date(date) : null,
-      lat: lat ?? null,
-      lng: lng ?? null,
-      cost: cost ?? null,
-    },
-  });
-  res.status(201).json({ activity });
+  try {
+    const activity = await prisma.activity.create({
+      data: {
+        ...rest,
+        tripId,
+        time: formattedTime ?? null,
+        isBackup: isBackup ?? false,
+        date: date ? new Date(date) : null,
+        lat: lat ?? null,
+        lng: lng ?? null,
+        cost: cost ?? null,
+        duration: rest.duration ?? null,
+      },
+    });
+    res.status(201).json({ activity });
+  } catch (err: any) {
+    console.error("[Activity Create Error]:", err);
+    res.status(500).json({ error: "新增活動失敗", details: err.message });
+  }
 });
 
 // ── PATCH /api/trips/:tripId/activities/reorder ──────────
@@ -152,7 +160,7 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const { date, lat, lng, cost, time, ...rest } = parsed.data;
+  const { date, lat, lng, cost, time, isBackup, ...rest } = parsed.data;
 
   // 處理時間格式，確保符合 HH:MM (例如 09:00 而非 9:00)
   let formattedTime = time;
@@ -165,10 +173,12 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     data: {
       ...rest,
       ...(time !== undefined ? { time: formattedTime ?? null } : {}),
+      ...(isBackup !== undefined ? { isBackup } : {}),
       ...(date !== undefined ? { date: date ? new Date(date) : null } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
       ...(cost !== undefined ? { cost } : {}),
+      ...(rest.duration !== undefined ? { duration: rest.duration } : {}),
     },
   });
   res.json({ activity: updated });

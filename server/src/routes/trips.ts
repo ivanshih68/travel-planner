@@ -187,10 +187,16 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   if (!finalCoverImage) {
     try {
       // 1. 優先從資料庫找尋相同目的地的圖片 (快取機制)
+      // 移除前後空格並轉小寫，確保搜尋更準確
+      const cleanDestination = rest.destination.trim();
       const existingTripWithImage = await prisma.trip.findFirst({
         where: {
-          destination: rest.destination,
-          coverImage: { not: null, notIn: [DEFAULT_TRIP_COVER] },
+          destination: { equals: cleanDestination, mode: 'insensitive' },
+          coverImage: { 
+            not: null, 
+            notIn: [DEFAULT_TRIP_COVER],
+            startsWith: 'http' // 確保是有效的 URL
+          },
         },
         select: { coverImage: true },
       });

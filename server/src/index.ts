@@ -3,11 +3,14 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-dotenv.config();
+import path from "path";
+dotenv.config({ path: path.resolve(process.cwd(), "..", ".env") });
+dotenv.config(); // 同時嘗試載入當前目錄下的 .env
 
 import authRouter from "./routes/auth";
 import tripsRouter from "./routes/trips";
 import activitiesRouter from "./routes/activities";
+import weatherRouter from "./routes/weather";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001", 10);
@@ -50,6 +53,7 @@ app.use("/api/trips", tripsRouter);
 // 活動路由：巢狀在 trips 下，以及獨立的 /api/activities/:id
 app.use("/api/trips/:tripId/activities", activitiesRouter);
 app.use("/api/activities", activitiesRouter);
+app.use("/api/weather", weatherRouter);
 
 // ── Global Error Handler ─────────────────────────────────
 app.use(

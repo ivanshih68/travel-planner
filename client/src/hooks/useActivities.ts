@@ -66,6 +66,7 @@ export const useActivities = (tripId: string | null | undefined) => {
       notes?: string;
       images?: string[];
       sortOrder?: number;
+      isBackup?: boolean;
     }) => {
       if (!tripId) throw new Error("tripId is required");
       const { data: res } = await activitiesApi.create(tripId, data);
