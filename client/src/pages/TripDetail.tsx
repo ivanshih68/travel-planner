@@ -343,9 +343,16 @@ function ActivityCard({
             {activity.location && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500 w-full overflow-hidden">
                 <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate block flex-1 min-w-0" style={{ maxWidth: 'calc(100% - 20px)' }}>
-                  {activity.location}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="truncate block font-medium" style={{ maxWidth: '100%' }}>
+                    {activity.location}
+                  </span>
+                  {activity.address && (
+                    <span className="truncate block text-[10px] opacity-80" style={{ maxWidth: '100%' }}>
+                      {activity.address}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             
@@ -912,7 +919,7 @@ export default function TripDetail() {
               <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">開始時間</Label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
               <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預計時長 (分鐘)</Label><Input type="number" placeholder="60" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             </div>
-            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." initialValue={form.location} /></div>
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onPlaceSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." defaultValue={form.location} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預估花費 ({trip.currency})</Label><Input type="number" placeholder="0" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
