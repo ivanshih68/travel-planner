@@ -4,7 +4,7 @@
 export async function fetchUnsplashCoverImage(destination: string): Promise<string | null> {
   console.log(`[Unsplash Debug] 開始抓取圖片，目的地: ${destination}`);
   try {
-    const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+    const accessKey = process.env.UNSPLASH_ACCESS_KEY || process.env.VITE_UNSPLASH_ACCESS_KEY;
     
     // 檢查金鑰是否存在（僅顯示前 4 碼以示安全）
     if (!accessKey) {

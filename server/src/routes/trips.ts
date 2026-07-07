@@ -186,8 +186,23 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   let finalCoverImage = coverImage;
   if (!finalCoverImage) {
     try {
-      const fetchedImage = await fetchUnsplashCoverImage(rest.destination);
-      finalCoverImage = fetchedImage || DEFAULT_TRIP_COVER;
+      // 1. 優先從資料庫找尋相同目的地的圖片 (快取機制)
+      const existingTripWithImage = await prisma.trip.findFirst({
+        where: {
+          destination: { equals: rest.destination, mode: 'insensitive' },
+          coverImage: { not: null, notIn: [DEFAULT_TRIP_COVER] },
+        },
+        select: { coverImage: true },
+      });
+
+      if (existingTripWithImage?.coverImage) {
+        console.log(`[Trip Cache] 找到目的地 "${rest.destination}" 的快取圖片`);
+        finalCoverImage = existingTripWithImage.coverImage;
+      } else {
+        // 2. 若無快取，則呼叫 Unsplash API
+        const fetchedImage = await fetchUnsplashCoverImage(rest.destination);
+        finalCoverImage = fetchedImage || DEFAULT_TRIP_COVER;
+      }
     } catch (error) {
       console.error("Auto fetch cover image failed:", error);
       finalCoverImage = DEFAULT_TRIP_COVER;
