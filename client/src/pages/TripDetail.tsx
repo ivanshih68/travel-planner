@@ -819,7 +819,6 @@ export default function TripDetail() {
                 </h2>
               </div>
               <div className="hidden lg:flex flex-col gap-2">
-                <Button variant="outline" onClick={() => openAddActivity(true)} className="rounded-full border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)] hover:bg-gray-50"><Plus className="w-4 h-4 mr-2" /> 新增備案</Button>
                 <Button onClick={() => openAddActivity(false)} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
               </div>
             </div>
@@ -833,16 +832,13 @@ export default function TripDetail() {
                 return (
                   <div key={activity.id} className="space-y-6">
                     {showSeparator && (
-                      <div className="relative py-4 flex items-center gap-4">
-                        <div className="w-12 flex justify-center z-10">
-                          <div className="w-3 h-3 rounded-full bg-orange-400 ring-4 ring-orange-50" />
-                        </div>
-                        <div className="flex-1 flex items-center gap-4">
-                          <div className="h-px flex-1 border-t-2 border-dashed border-orange-200" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
-                            Plan B 備案活動
+                      <div className="relative py-8 flex items-center">
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                          <span className="text-xs font-bold tracking-widest text-red-500/80 px-4">
+                            以下為行程備案
                           </span>
-                          <div className="h-px flex-1 border-t-2 border-dashed border-orange-200" />
+                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
                         </div>
                       </div>
                     )}
@@ -895,7 +891,18 @@ export default function TripDetail() {
             <DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
               {editingActivity ? "編輯活動" : "新增活動"}
             </DialogTitle>
-
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-orange-50 rounded-xl border border-orange-100">
+              <input 
+                type="checkbox" 
+                id="isBackup" 
+                checked={form.isBackup} 
+                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })}
+                className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+              />
+              <Label htmlFor="isBackup" className="text-xs font-bold text-orange-700 cursor-pointer whitespace-nowrap">
+                設為 Plan B 的備案活動
+              </Label>
+            </div>
           </DialogHeader>
           <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">活動名稱</Label><Input placeholder="要去哪裡？" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)] focus:border-[oklch(0.62_0.12_220)]" /></div>
@@ -910,19 +917,6 @@ export default function TripDetail() {
             </div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
-
-            <div className="flex items-center space-x-2 p-4 bg-orange-50 rounded-2xl border border-orange-100">
-              <input 
-                type="checkbox" 
-                id="isBackup" 
-                checked={form.isBackup} 
-                onChange={(e) => setForm({ ...form, isBackup: e.target.checked })}
-                className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
-              />
-              <Label htmlFor="isBackup" className="text-sm font-bold text-orange-700 cursor-pointer">
-                設為 Plan B 備案活動
-              </Label>
-            </div>
           </div>
           <div className="p-8 pt-0 flex gap-3"><Button variant="outline" onClick={() => setShowAddActivity(false)} className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</Button><Button onClick={editingActivity ? handleUpdateActivity : handleCreateActivity} disabled={isSaving || !form.title} className="flex-1 h-12 rounded-xl bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] text-white">{isSaving ? "儲存中..." : (editingActivity ? "更新活動" : "新增活動")}</Button></div>
         </DialogContent>
