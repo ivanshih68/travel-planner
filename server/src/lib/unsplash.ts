@@ -28,7 +28,7 @@ export async function fetchUnsplashCoverImage(destination: string): Promise<stri
       return null;
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
     
     // 注意：random API 回傳的是單一物件，所以直接取 data.urls.regular
     const imageUrl = data?.urls?.regular;
