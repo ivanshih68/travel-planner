@@ -831,38 +831,56 @@ export default function TripDetail() {
             </div>
 
             <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
-              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
-                <ActivityCard 
-                  key={activity.id}
-                  activity={activity} 
-                  index={idx} 
-                  isFirst={idx === 0} 
-                  isLast={idx === mainActivities.length - 1} 
-                  currency={trip.currency} 
-                  hasConflict={conflictingIds.has(activity.id!)} 
-                  onEdit={() => { 
-                    setEditingActivity(activity); 
-                    setForm({ 
-                      title: activity.title, 
-                      category: activity.category, 
-                      time: activity.time || "", 
-                      location: activity.location || "", 
-                      address: activity.address || "", 
-                      notes: activity.notes || "", 
-                      cost: activity.cost?.toString() || "", 
-                      duration: activity.duration?.toString() || "", 
-                      lat: (activity as any).lat, 
-                      lng: (activity as any).lng, 
-                      images: activity.images || [],
-                      isBackup: activity.isBackup || false
-                    }); 
-                    setShowAddActivity(true); 
-                  }} 
-                  onDelete={() => setDeletingActivity(activity)} 
-                  onMoveUp={() => handleMoveActivity(idx, 'up')} 
-                  onMoveDown={() => handleMoveActivity(idx, 'down')} 
-                />
-              )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
+              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => {
+                const isPlanB = activity.isBackup;
+                const prevIsMain = idx > 0 && !mainActivities[idx - 1].isBackup;
+                const showSeparator = isPlanB && prevIsMain;
+
+                return (
+                  <div key={activity.id} className="space-y-6">
+                    {showSeparator && (
+                      <div className="relative py-8 flex items-center">
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                          <span className="text-xs font-bold tracking-widest text-red-500/80 px-4">
+                            以下為行程備案
+                          </span>
+                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                        </div>
+                      </div>
+                    )}
+                    <ActivityCard 
+                      activity={activity} 
+                      index={idx} 
+                      isFirst={idx === 0} 
+                      isLast={idx === mainActivities.length - 1} 
+                      currency={trip.currency} 
+                      hasConflict={conflictingIds.has(activity.id!)} 
+                      onEdit={() => { 
+                        setEditingActivity(activity); 
+                        setForm({ 
+                          title: activity.title, 
+                          category: activity.category, 
+                          time: activity.time || "", 
+                          location: activity.location || "", 
+                          address: activity.address || "", 
+                          notes: activity.notes || "", 
+                          cost: activity.cost?.toString() || "", 
+                          duration: activity.duration?.toString() || "", 
+                          lat: (activity as any).lat, 
+                          lng: (activity as any).lng, 
+                          images: activity.images || [],
+                          isBackup: activity.isBackup || false
+                        }); 
+                        setShowAddActivity(true); 
+                      }} 
+                      onDelete={() => setDeletingActivity(activity)} 
+                      onMoveUp={() => handleMoveActivity(idx, 'up')} 
+                      onMoveDown={() => handleMoveActivity(idx, 'down')} 
+                    />
+                  </div>
+                );
+              }) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
             </div>
 
 
