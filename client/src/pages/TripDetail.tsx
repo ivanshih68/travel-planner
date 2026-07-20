@@ -26,6 +26,7 @@ import {
   ChevronDown,
   X,
   ExternalLink,
+  Link as LinkIcon,
   Sun,
   Cloud,
   CloudRain,
