@@ -140,9 +140,15 @@ function ActivityDetailSheet({
   const config = categoryConfig[activity.category] || categoryConfig.OTHER;
   
   const handleOpenInGoogleMaps = () => {
-    const query = activity.address || activity.location || activity.title;
-    if (!query) return;
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+    let url = "";
+    if ((activity as any).lat && (activity as any).lng) {
+      url = `https://www.google.com/maps/search/?api=1&query=${(activity as any).lat},${(activity as any).lng}`;
+    } else {
+      const query = activity.address || activity.location || activity.title;
+      if (!query) return;
+      url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    }
+    window.open(url, '_blank');
   };
 
   return (
@@ -1110,7 +1116,7 @@ export default function TripDetail() {
               <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">開始時間</Label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
               <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預計時長 (分鐘)</Label><Input type="number" placeholder="60" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             </div>
-            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." initialValue={form.location} /></div>
+            <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">地點搜尋</Label><PlaceSearch onPlaceSelect={(place) => setForm({ ...form, location: place.name, address: place.address, lat: place.lat, lng: place.lng })} placeholder="搜尋 Google 地點..." defaultValue={form.location} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">預估花費 ({trip.currency})</Label><Input type="number" placeholder="0" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label><CloudinaryImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></div>
             <div className="space-y-1.5"><Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">備註</Label><Textarea placeholder="有什麼要注意的嗎？" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="rounded-xl border-[oklch(0.88_0.008_220)]" rows={3} /></div>
