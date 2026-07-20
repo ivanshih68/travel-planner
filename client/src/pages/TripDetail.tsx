@@ -53,10 +53,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/contexts/AuthContext";
 import { CloudinaryImageUpload } from "@/components/CloudinaryImageUpload";
 import { useActivities } from "@/hooks/useActivities";
+import { useNotes } from "@/hooks/useNotes";
 import { useIsMobile } from "@/hooks/useMobile";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { MapPreview } from "@/components/MapPreview";
-import { tripsApi, tripSharingApi, type Trip, type Activity, type TripShare } from "@/lib/api";
+import { NoteCard } from "@/components/NoteComponents";
+import { tripsApi, tripSharingApi, type Trip, type Activity, type TripShare, type Note } from "@/lib/api";
 import { exportTripToPdf } from "@/lib/exportPdf";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663760105877/FKWg7QY89BMBENe4mCAPfG/logo-icon-nDuQzmKqhkrEYACEszfx6u.webp";
@@ -82,6 +84,13 @@ interface ActivityForm {
   lng?: number;
   images: string[];
   isBackup: boolean;
+}
+
+interface NoteForm {
+  title: string;
+  content: string;
+  sourceUrl: string;
+  images: string[];
 }
 
 const defaultActivityForm: ActivityForm = {
@@ -427,9 +436,11 @@ export default function TripDetail() {
   const tripId = params.id;
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const { activities, activitiesByDay, loading, createActivity, updateActivity, deleteActivity, reorderActivities } = useActivities(tripId);
+  const { activities, activitiesByDay, loading: activitiesLoading, createActivity, updateActivity, deleteActivity, reorderActivities } = useActivities(tripId);
+  const { notes, loading: notesLoading, createNote, updateNote, deleteNote } = useNotes(tripId);
   const isMobile = useIsMobile();
 
+  const [activeTab, setActiveTab] = useState<"itinerary" | "notes">("itinerary");
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tripLoading, setTripLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState(1);
@@ -437,6 +448,12 @@ export default function TripDetail() {
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [deletingActivity, setDeletingActivity] = useState<Activity | null>(null);
   const [form, setForm] = useState<ActivityForm>(defaultActivityForm);
+
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [deletingNote, setDeletingNote] = useState<Note | null>(null);
+  const [noteForm, setNoteForm] = useState<NoteForm>({ title: "", content: "", sourceUrl: "", images: [] });
+
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -638,6 +655,45 @@ export default function TripDetail() {
     }
   };
 
+  const handleCreateNote = async () => {
+    if (!tripId || !noteForm.title) return;
+    setIsSaving(true);
+    try {
+      await createNote(noteForm);
+      setShowAddNote(false);
+      toast.success("記事已新增");
+    } catch (err) {
+      toast.error("新增失敗");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateNote = async () => {
+    if (!editingNote || !noteForm.title) return;
+    setIsSaving(true);
+    try {
+      await updateNote(editingNote.id, noteForm);
+      setShowAddNote(false);
+      toast.success("記事已更新");
+    } catch (err) {
+      toast.error("更新失敗");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteNote = async () => {
+    if (!deletingNote) return;
+    try {
+      await deleteNote(deletingNote.id);
+      setDeletingNote(null);
+      toast.success("記事已刪除");
+    } catch (err) {
+      toast.error("刪除失敗");
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!trip) return;
     setIsExporting(true);
@@ -723,16 +779,43 @@ export default function TripDetail() {
             <span>{days.length} 天</span>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-          {days.map((d) => (
-            <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-[1.02]" : "hover:bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
-              <div className="text-left">
-                <div className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>{d.label}</div>
-                <div className="font-bold">{d.dateStr} {d.weekday}</div>
+        <div className="p-4 space-y-1">
+          <button 
+            onClick={() => setActiveTab("itinerary")}
+            className={`w-full flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${activeTab === "itinerary" ? "bg-[oklch(0.22_0.08_220)] text-white" : "text-[oklch(0.45_0.05_220)] hover:bg-gray-50"}`}
+          >
+            <Calendar className="w-5 h-5" />
+            <span>行程規劃</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab("notes")}
+            className={`w-full flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${activeTab === "notes" ? "bg-[oklch(0.22_0.08_220)] text-white" : "text-[oklch(0.45_0.05_220)] hover:bg-gray-50"}`}
+          >
+            <FileText className="w-5 h-5" />
+            <span>記事本</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-2 custom-scrollbar">
+          {activeTab === "itinerary" ? (
+            days.map((d) => (
+              <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-[1.02]" : "hover:bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
+                <div className="text-left">
+                  <div className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>{d.label}</div>
+                  <div className="font-bold">{d.dateStr} {d.weekday}</div>
+                </div>
+                <div className={`text-xs font-bold px-2 py-1 rounded-lg ${selectedDay === d.day ? "bg-white/20" : "bg-gray-100"}`}>{activitiesByDay[d.day]?.length || 0}</div>
+              </button>
+            ))
+          ) : (
+            <div className="p-4 text-center py-8">
+              <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <FileText className="w-6 h-6 text-teal-600" />
               </div>
-              <div className={`text-xs font-bold px-2 py-1 rounded-lg ${selectedDay === d.day ? "bg-white/20" : "bg-gray-100"}`}>{activitiesByDay[d.day]?.length || 0}</div>
-            </button>
-          ))}
+              <p className="text-sm font-bold text-[oklch(0.22_0.08_220)]">所有筆記</p>
+              <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest">{notes.length} 則記事</p>
+            </div>
+          )}
         </div>
         <div className="p-6 bg-[oklch(0.98_0.005_220)] border-t border-[oklch(0.95_0.005_220)]">
           <div className="flex justify-between items-center mb-4">
@@ -758,14 +841,30 @@ export default function TripDetail() {
           </div>
           <button onClick={handleShareTrip} className="p-2"><Share2 className="w-5 h-5 text-[oklch(0.22_0.08_220)]" /></button>
         </div>
-        <div className="flex overflow-x-auto px-4 pb-3 no-scrollbar gap-2">
-          {days.map((d) => (
-            <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-105" : "bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
-              <span className={`text-[10px] font-bold uppercase mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>Day {d.day}</span>
-              <span className="text-sm font-bold">{d.dateStr}</span>
-            </button>
-          ))}
+        <div className="flex px-4 pb-3 gap-4 border-b border-gray-100">
+          <button 
+            onClick={() => setActiveTab("itinerary")}
+            className={`flex-1 py-2 text-sm font-bold transition-all border-b-2 ${activeTab === "itinerary" ? "border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)]" : "border-transparent text-gray-400"}`}
+          >
+            行程規劃
+          </button>
+          <button 
+            onClick={() => setActiveTab("notes")}
+            className={`flex-1 py-2 text-sm font-bold transition-all border-b-2 ${activeTab === "notes" ? "border-[oklch(0.22_0.08_220)] text-[oklch(0.22_0.08_220)]" : "border-transparent text-gray-400"}`}
+          >
+            記事本
+          </button>
         </div>
+        {activeTab === "itinerary" && (
+          <div className="flex overflow-x-auto px-4 py-3 no-scrollbar gap-2">
+            {days.map((d) => (
+              <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-105" : "bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
+                <span className={`text-[10px] font-bold uppercase mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>Day {d.day}</span>
+                <span className="text-sm font-bold">{d.dateStr}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       <div className="flex-1 flex flex-col lg:h-screen lg:overflow-hidden">
@@ -798,72 +897,158 @@ export default function TripDetail() {
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-end justify-between mb-8">
-              <div>
-                <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">{days[selectedDay - 1]?.label}</div>
-                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)] flex items-center gap-4 flex-wrap">
-                  <span>
-                    {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
-                    <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">{days[selectedDay - 1]?.weekday}</span>
-                  </span>
-                  {weather && (
-                    <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-white/50 shadow-sm animate-in fade-in slide-in-from-left-2">
-                      <WeatherIcon main={weather.main} className="w-6 h-6 text-[oklch(0.62_0.12_220)]" />
-                      <div className="flex flex-col leading-none">
-                        <span className="text-sm font-black text-[oklch(0.22_0.08_220)]">{weather.temp}°C</span>
-                        <span className="text-[10px] font-bold text-blue-500">{Math.round(weather.pop * 100)}% 降雨</span>
+            {activeTab === "itinerary" ? (
+              <>
+                <div className="flex items-end justify-between mb-8">
+                  <div>
+                    <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">{days[selectedDay - 1]?.label}</div>
+                    <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)] flex items-center gap-4 flex-wrap">
+                      <span>
+                        {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
+                        <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">{days[selectedDay - 1]?.weekday}</span>
+                      </span>
+                      {weather && (
+                        <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-white/50 shadow-sm animate-in fade-in slide-in-from-left-2">
+                          <WeatherIcon main={weather.main} className="w-6 h-6 text-[oklch(0.62_0.12_220)]" />
+                          <div className="flex flex-col leading-none">
+                            <span className="text-sm font-black text-[oklch(0.22_0.08_220)]">{weather.temp}°C</span>
+                            <span className="text-[10px] font-bold text-blue-500">{Math.round(weather.pop * 100)}% 降雨</span>
+                          </div>
+                        </div>
+                      )}
+                      {weatherLoading && <Skeleton className="h-10 w-24 rounded-2xl" />}
+                    </h2>
+                  </div>
+                  <div className="hidden lg:flex flex-col gap-2">
+                    <Button onClick={() => openAddActivity(false)} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
+                  </div>
+                </div>
+
+                <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
+                  {mainActivities.length > 0 ? mainActivities.map((activity, idx) => {
+                    const isPlanB = activity.isBackup;
+                    const prevIsMain = idx > 0 && !mainActivities[idx - 1].isBackup;
+                    const showSeparator = isPlanB && prevIsMain;
+
+                    return (
+                      <div key={activity.id} className="space-y-6">
+                        {showSeparator && (
+                          <div className="relative py-8 flex items-center">
+                            <div className="flex-1 flex items-center gap-2">
+                              <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                              <span className="text-xs font-bold tracking-widest text-red-500/80 px-4">
+                                以下為行程備案
+                              </span>
+                              <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                            </div>
+                          </div>
+                        )}
+                        <ActivityCard 
+                          activity={activity} 
+                          index={idx} 
+                          isFirst={idx === 0} 
+                          isLast={idx === mainActivities.length - 1} 
+                          currency={trip.currency} 
+                          hasConflict={conflictingIds.has(activity.id!)} 
+                          onEdit={() => { 
+                            setEditingActivity(activity); 
+                            setForm({ 
+                              title: activity.title, 
+                              category: activity.category, 
+                              time: activity.time || "", 
+                              location: activity.location || "", 
+                              address: activity.address || "", 
+                              notes: activity.notes || "", 
+                              cost: activity.cost?.toString() || "", 
+                              duration: activity.duration?.toString() || "", 
+                              lat: (activity as any).lat, 
+                              lng: (activity as any).lng, 
+                              images: activity.images || [],
+                              isBackup: activity.isBackup || false
+                            }); 
+                            setShowAddActivity(true); 
+                          }} 
+                          onDelete={() => setDeletingActivity(activity)} 
+                          onMoveUp={() => handleMoveActivity(idx, 'up')} 
+                          onMoveDown={() => handleMoveActivity(idx, 'down')} 
+                        />
                       </div>
+                    );
+                  }) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-end justify-between mb-8">
+                  <div>
+                    <div className="text-sm font-bold text-teal-600 uppercase tracking-widest mb-1">個人筆記</div>
+                    <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)]">行程記事本</h2>
+                  </div>
+                  <div className="hidden lg:flex flex-col gap-2">
+                    <Button 
+                      onClick={() => {
+                        setEditingNote(null);
+                        setNoteForm({ title: "", content: "", sourceUrl: "", images: [] });
+                        setShowAddNote(true);
+                      }} 
+                      className="rounded-full bg-teal-600 hover:bg-teal-700 px-6"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> 新增記事
+                    </Button>
+                  </div>
+                </div>
+
+                {notes.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {notes.map((note) => (
+                      <NoteCard 
+                        key={note.id} 
+                        note={note} 
+                        onEdit={() => {
+                          setEditingNote(note);
+                          setNoteForm({ 
+                            title: note.title, 
+                            content: note.content || "", 
+                            sourceUrl: note.sourceUrl || "", 
+                            images: note.images || [] 
+                          });
+                          setShowAddNote(true);
+                        }}
+                        onDelete={() => setDeletingNote(note)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 bg-white rounded-[32px] border-2 border-dashed border-gray-100">
+                    <div className="w-20 h-20 bg-teal-50 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                      <FileText className="w-10 h-10 text-teal-600" />
                     </div>
-                  )}
-                  {weatherLoading && <Skeleton className="h-10 w-24 rounded-2xl" />}
-                </h2>
-              </div>
-              <div className="hidden lg:flex flex-col gap-2">
-                <Button onClick={() => openAddActivity(false)} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
-              </div>
-            </div>
-
-            <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
-              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => (
-                <ActivityCard 
-                  key={activity.id}
-                  activity={activity} 
-                  index={idx} 
-                  isFirst={idx === 0} 
-                  isLast={idx === mainActivities.length - 1} 
-                  currency={trip.currency} 
-                  hasConflict={conflictingIds.has(activity.id!)} 
-                  onEdit={() => { 
-                    setEditingActivity(activity); 
-                    setForm({ 
-                      title: activity.title, 
-                      category: activity.category, 
-                      time: activity.time || "", 
-                      location: activity.location || "", 
-                      address: activity.address || "", 
-                      notes: activity.notes || "", 
-                      cost: activity.cost?.toString() || "", 
-                      duration: activity.duration?.toString() || "", 
-                      lat: (activity as any).lat, 
-                      lng: (activity as any).lng, 
-                      images: activity.images || [],
-                      isBackup: activity.isBackup || false
-                    }); 
-                    setShowAddActivity(true); 
-                  }} 
-                  onDelete={() => setDeletingActivity(activity)} 
-                  onMoveUp={() => handleMoveActivity(idx, 'up')} 
-                  onMoveDown={() => handleMoveActivity(idx, 'down')} 
-                />
-              )) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
-            </div>
-
-
+                    <h3 className="text-xl font-bold text-[oklch(0.22_0.08_220)] mb-2">還沒有任何記事</h3>
+                    <p className="text-gray-400 max-w-xs mx-auto mb-8">記錄旅行途中的瑣碎小事、美食清單或是想去的店家資訊。</p>
+                    <Button 
+                      onClick={() => {
+                        setEditingNote(null);
+                        setNoteForm({ title: "", content: "", sourceUrl: "", images: [] });
+                        setShowAddNote(true);
+                      }} 
+                      className="rounded-full bg-teal-600 hover:bg-teal-700 px-8"
+                    >
+                      開始記錄第一則記事
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </main>
 
         <div className="lg:hidden fixed bottom-6 right-6 z-30">
-          <Button onClick={openAddActivity} className="w-14 h-14 rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] shadow-2xl flex items-center justify-center p-0"><Plus className="w-6 h-6 text-white" /></Button>
+          <Button 
+            onClick={() => activeTab === "itinerary" ? openAddActivity() : setShowAddNote(true)} 
+            className={`w-14 h-14 rounded-full shadow-2xl flex items-center justify-center p-0 ${activeTab === "itinerary" ? "bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)]" : "bg-teal-600 hover:bg-teal-700"}`}
+          >
+            <Plus className="w-6 h-6 text-white" />
+          </Button>
         </div>
       </div>
 
@@ -922,6 +1107,80 @@ export default function TripDetail() {
       </Dialog>
 
       <AlertDialog open={!!deletingActivity} onOpenChange={() => setDeletingActivity(null)}><AlertDialogContent className="rounded-[32px] bg-white border-none p-8"><AlertDialogHeader><AlertDialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">確定要刪除？</AlertDialogTitle><AlertDialogDescription className="text-gray-500">「{deletingActivity?.title}」將被永久移除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter className="mt-6 gap-3"><AlertDialogCancel className="flex-1 h-12 rounded-xl border-[oklch(0.88_0.008_220)]">取消</AlertDialogCancel><AlertDialogAction onClick={handleDeleteActivity} className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white border-none">確定刪除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+
+      {/* Note Form Dialog */}
+      <Dialog open={showAddNote} onOpenChange={setShowAddNote}>
+        <DialogContent className="bg-white sm:max-w-lg rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 pb-0">
+            <DialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">
+              {editingNote ? "編輯記事" : "新增記事"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">名稱</Label>
+              <Input 
+                placeholder="例如: 必買清單、退稅注意事項..." 
+                value={noteForm.title} 
+                onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })} 
+                className="h-12 rounded-xl border-[oklch(0.88_0.008_220)]" 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">描述</Label>
+              <Textarea 
+                placeholder="輸入詳細內容..." 
+                value={noteForm.content} 
+                onChange={(e) => setNoteForm({ ...noteForm, content: e.target.value })} 
+                className="rounded-xl border-[oklch(0.88_0.008_220)]" 
+                rows={5} 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">來源網站</Label>
+              <div className="relative">
+                <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input 
+                  placeholder="https://..." 
+                  value={noteForm.sourceUrl} 
+                  onChange={(e) => setNoteForm({ ...noteForm, sourceUrl: e.target.value })} 
+                  className="h-12 pl-11 rounded-xl border-[oklch(0.88_0.008_220)]" 
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-[oklch(0.35_0.06_220)]">照片</Label>
+              <CloudinaryImageUpload 
+                images={noteForm.images} 
+                onChange={(images) => setNoteForm({ ...noteForm, images })} 
+              />
+            </div>
+          </div>
+          <div className="p-8 pt-0 flex gap-3">
+            <Button variant="outline" onClick={() => setShowAddNote(false)} className="flex-1 h-12 rounded-xl">取消</Button>
+            <Button 
+              onClick={editingNote ? handleUpdateNote : handleCreateNote} 
+              disabled={isSaving || !noteForm.title} 
+              className="flex-1 h-12 rounded-xl bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              {isSaving ? "儲存中..." : (editingNote ? "更新記事" : "新增記事")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deletingNote} onOpenChange={() => setDeletingNote(null)}>
+        <AlertDialogContent className="rounded-[32px] bg-white border-none p-8">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-black text-[oklch(0.22_0.08_220)]">確定要刪除？</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500">「{deletingNote?.title}」將被永久移除。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 gap-3">
+            <AlertDialogCancel className="flex-1 h-12 rounded-xl">取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteNote} className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white border-none">確定刪除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

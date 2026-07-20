@@ -89,6 +89,17 @@ export interface Activity {
   updatedAt: string;
 }
 
+export interface Note {
+  id: string;
+  tripId: string;
+  title: string;
+  content: string | null;
+  sourceUrl: string | null;
+  images: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Auth API ─────────────────────────────────────────────
 export const authApi = {
   register: (data: { name: string; email: string; password: string }) =>
@@ -223,4 +234,26 @@ export const tripSharingApi = {
 
   getSharedWithMe: () =>
     api.get<{ trips: SharedTrip[] }>(`/api/trips/shared-with-me`),
+};
+
+// ── Notes API ─────────────────────────────────────────────
+export const notesApi = {
+  list: (tripId: string) =>
+    api.get<{ notes: Note[] }>(`/api/trips/${tripId}/notes`),
+
+  create: (
+    tripId: string,
+    data: {
+      title: string;
+      content?: string;
+      sourceUrl?: string;
+      images?: string[];
+    }
+  ) =>
+    api.post<{ note: Note }>(`/api/trips/${tripId}/notes`, data),
+
+  update: (id: string, data: Partial<Note>) =>
+    api.patch<{ note: Note }>(`/api/notes/${id}`, data),
+
+  delete: (id: string) => api.delete(`/api/notes/${id}`),
 };

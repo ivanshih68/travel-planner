@@ -10,6 +10,7 @@ dotenv.config(); // 同時嘗試載入當前目錄下的 .env
 import authRouter from "./routes/auth";
 import tripsRouter from "./routes/trips";
 import activitiesRouter from "./routes/activities";
+import notesRouter from "./routes/notes";
 import weatherRouter from "./routes/weather";
 
 const app = express();
@@ -53,6 +54,8 @@ app.use("/api/trips", tripsRouter);
 // 活動路由：巢狀在 trips 下，以及獨立的 /api/activities/:id
 app.use("/api/trips/:tripId/activities", activitiesRouter);
 app.use("/api/activities", activitiesRouter);
+app.use("/api/trips/:tripId/notes", notesRouter);
+app.use("/api/notes", notesRouter);
 app.use("/api/weather", weatherRouter);
 
 // ── Global Error Handler ─────────────────────────────────
