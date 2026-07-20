@@ -737,77 +737,89 @@ export default function TripDetail() {
     }
   };
 
-  if (tripLoading) {
-    return (
-      <div className="min-h-screen bg-[oklch(0.97_0.015_80)] p-6">
-        <Skeleton className="h-8 w-48 mb-4" />
-        <Skeleton className="h-32 w-full rounded-2xl mb-4" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-      </div>
-    );
-  }
+              <>
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <div className="text-sm font-bold text-[oklch(0.55_0.03_220)] uppercase tracking-widest mb-1">{days[selectedDay - 1]?.label}</div>
+                <h2 className="text-3xl font-black text-[oklch(0.22_0.08_220)] flex items-center gap-4 flex-wrap">
+                  <span>
+                    {days[selectedDay - 1] ? format(days[selectedDay - 1].date, "M月d日", { locale: zhTW }) : ""}
+                    <span className="ml-3 text-xl font-bold text-[oklch(0.45_0.05_220)]">{days[selectedDay - 1]?.weekday}</span>
+                  </span>
+                  {weather && (
+                    <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-white/50 shadow-sm animate-in fade-in slide-in-from-left-2">
+                      <WeatherIcon main={weather.main} className="w-6 h-6 text-[oklch(0.62_0.12_220)]" />
+                      <div className="flex flex-col leading-none">
+                        <span className="text-sm font-black text-[oklch(0.22_0.08_220)]">{weather.temp}°C</span>
+                        <span className="text-[10px] font-bold text-blue-500">{Math.round(weather.pop * 100)}% 降雨</span>
+                      </div>
+                    </div>
+                  )}
+                  {weatherLoading && <Skeleton className="h-10 w-24 rounded-2xl" />}
+                </h2>
+              </div>
+              <div className="hidden lg:flex flex-col gap-2">
+                <Button onClick={() => openAddActivity(false)} className="rounded-full bg-[oklch(0.22_0.08_220)] hover:bg-[oklch(0.35_0.06_220)] px-6"><Plus className="w-4 h-4 mr-2" /> 新增活動</Button>
+              </div>
+            </div>
 
-  if (!trip) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[oklch(0.97_0.015_80)]">
-        <div className="bg-white p-8 rounded-3xl shadow-sm text-center max-w-md">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-xl font-bold text-[oklch(0.22_0.08_220)] mb-2">找不到此行程</h2>
-          <Button onClick={() => setLocation("/dashboard")} className="rounded-full w-full">回到儀表板</Button>
-        </div>
-      </div>
-    );
-  }
+            <div className="space-y-6 relative before:absolute before:left-[23px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[oklch(0.92_0.01_220)] before:rounded-full">
+              {mainActivities.length > 0 ? mainActivities.map((activity, idx) => {
+                const isPlanB = activity.isBackup;
+                const prevIsMain = idx > 0 && !mainActivities[idx - 1].isBackup;
+                const showSeparator = isPlanB && prevIsMain;
 
-  return (
-    <div className="min-h-screen bg-[oklch(0.97_0.015_80)] lg:flex">
-      <aside className="hidden lg:flex w-80 flex-col bg-white border-r border-[oklch(0.92_0.01_220)] h-screen sticky top-0">
-        <div className="p-6 border-b border-[oklch(0.95_0.005_220)]">
-          <button onClick={() => setLocation("/dashboard")} className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] hover:text-[oklch(0.22_0.08_220)] transition-colors mb-6 group">
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-bold">返回儀表板</span>
-          </button>
-          <div className="flex items-center gap-3 mb-1">
-            <img src={LOGO_URL} alt="Logo" className="w-6 h-6" />
-            <h1 className="text-2xl font-['Playfair_Display'] font-black text-[oklch(0.22_0.08_220)] truncate">{trip.title}</h1>
-          </div>
-          <div className="flex items-center gap-2 text-[oklch(0.45_0.05_220)] text-sm">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{trip.destination}</span>
-            <span className="mx-1">•</span>
-            <span>{days.length} 天</span>
-          </div>
-        </div>
-        <div className="p-4 space-y-1">
-          <button 
-            onClick={() => setActiveTab("itinerary")}
-            className={`w-full flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${activeTab === "itinerary" ? "bg-[oklch(0.22_0.08_220)] text-white" : "text-[oklch(0.45_0.05_220)] hover:bg-gray-50"}`}
-          >
-            <Calendar className="w-5 h-5" />
-            <span>行程規劃</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab("notes")}
-            className={`w-full flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${activeTab === "notes" ? "bg-[oklch(0.22_0.08_220)] text-white" : "text-[oklch(0.45_0.05_220)] hover:bg-gray-50"}`}
-          >
-            <FileText className="w-5 h-5" />
-            <span>記事本</span>
-          </button>
-        </div>
+                return (
+                  <div key={activity.id} className="space-y-6">
+                    {showSeparator && (
+                      <div className="relative py-8 flex items-center">
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                          <span className="text-xs font-bold tracking-widest text-red-500/80 px-4">
+                            以下為行程備案
+                          </span>
+                          <div className="h-px flex-1 border-t-2 border-dashed border-red-400/60" />
+                        </div>
+                      </div>
+                    )}
+                    <ActivityCard 
+                      activity={activity} 
+                      index={idx} 
+                      isFirst={idx === 0} 
+                      isLast={idx === mainActivities.length - 1} 
+                      currency={trip.currency} 
+                      hasConflict={conflictingIds.has(activity.id!)} 
+                      onEdit={() => { 
+                        setEditingActivity(activity); 
+                        setForm({ 
+                          title: activity.title, 
+                          category: activity.category, 
+                          time: activity.time || "", 
+                          location: activity.location || "", 
+                          address: activity.address || "", 
+                          notes: activity.notes || "", 
+                          cost: activity.cost?.toString() || "", 
+                          duration: activity.duration?.toString() || "", 
+                          lat: (activity as any).lat, 
+                          lng: (activity as any).lng, 
+                          images: activity.images || [],
+                          isBackup: activity.isBackup || false
+                        }); 
+                        setShowAddActivity(true); 
+                      }} 
+                      onDelete={() => setDeletingActivity(activity)} 
+                      onMoveUp={() => handleMoveActivity(idx, 'up')} 
+                      onMoveDown={() => handleMoveActivity(idx, 'down')} 
+                    />
+                  </div>
+                );
+              }) : <DayEmptyState onAdd={() => openAddActivity(false)} />}
+            </div>
 
-        <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-2 custom-scrollbar">
-          {activeTab === "itinerary" ? (
-            days.map((d) => (
-              <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 ${selectedDay === d.day ? "bg-[oklch(0.22_0.08_220)] text-white shadow-md scale-[1.02]" : "hover:bg-[oklch(0.95_0.005_220)] text-[oklch(0.35_0.06_220)]"}`}>
-                <div className="text-left">
-                  <div className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${selectedDay === d.day ? "text-white/60" : "text-[oklch(0.55_0.03_220)]"}`}>{d.label}</div>
-                  <div className="font-bold">{d.dateStr} {d.weekday}</div>
-                </div>
-                <div className={`text-xs font-bold px-2 py-1 rounded-lg ${selectedDay === d.day ? "bg-white/20" : "bg-gray-100"}`}>{activitiesByDay[d.day]?.length || 0}</div>
-              </button>
-            ))
+
+          </div>
+              </>
           ) : (
             <div className="p-4 text-center py-8">
               <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
