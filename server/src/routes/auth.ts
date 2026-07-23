@@ -28,7 +28,7 @@ router.post("/register", async (req: Request, res: Response) => {
   }
 
   const { name, password } = parsed.data;
-  const email = parsed.data.email.toLowerCase(); // 統一轉小寫
+  const email = parsed.data.email.toLowerCase().trim(); // 統一轉小寫並去空格
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -55,7 +55,7 @@ router.post("/login", async (req: Request, res: Response) => {
   }
 
   const { password } = parsed.data;
-  const email = parsed.data.email.toLowerCase(); // 統一轉小寫
+  const email = parsed.data.email.toLowerCase().trim(); // 統一轉小寫並去空格
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {

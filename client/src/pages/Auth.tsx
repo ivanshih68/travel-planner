@@ -28,7 +28,7 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   displayName: z.string().min(2, "名稱至少需要 2 個字元"),
   email: z.string().email("請輸入有效的電子郵件"),
-  password: z.string().min(6, "密碼至少需要 6 個字元"),
+  password: z.string().min(8, "密碼至少需要 8 個字元"),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "兩次密碼輸入不一致",
